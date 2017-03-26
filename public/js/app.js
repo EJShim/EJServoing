@@ -2304,6 +2304,152 @@ E_Image.prototype.SetImageRed = function()
 module.exports = E_Image;
 
 },{}],4:[function(require,module,exports){
+function E_Tracker(Mgr)
+{
+  this.Manager = Mgr;
+
+  //Original Features in UV
+  this.initFeature = [];
+  this.initFeature[0] = new THREE.Vector2(-150.83334350585938, -144.5);
+  this.initFeature[1] = new THREE.Vector2(-150.83334350585938, 144.5);
+  this.initFeature[2] = new THREE.Vector2(150.16665649414062, -144.5);
+  this.initFeature[3] = new THREE.Vector2(150.16665649414062, 144.5);
+
+
+  //Fake Feature Position
+  this.fakeFeature = []
+  this.fakeFeature[1] = new THREE.Vector3(-11.787260127517664, 0, -11.787260127517664);
+  this.fakeFeature[0] = new THREE.Vector3(-11.787260127517664, 0, 11.787260127517664);
+  this.fakeFeature[3] = new THREE.Vector3(11.787260127517664, 0, -11.787260127517664);
+  this.fakeFeature[2] = new THREE.Vector3(11.787260127517664, 0, 11.787260127517664);
+
+  //Calculated Fake Feature
+  this.calFeature = [];
+  this.calFeature[0] = new THREE.Vector2();
+  this.calFeature[1] = new THREE.Vector2();
+  this.calFeature[2] = new THREE.Vector2();
+  this.calFeature[3] = new THREE.Vector2();
+}
+
+E_Tracker.prototype.CalculateVelocity = function(camera)
+{
+  var imgMgr = this.Manager.ImageMgr();
+
+  var lambda = camera.aspect;
+  var z = 90;
+
+  //Column Matrix
+  var uvBuffer = [];
+  var LBuffer = [];
+
+  var isCalibrated = true;
+
+
+  this.UpdateFeatureLable();
+
+  for(var i=0 ; i<4 ; i++){
+    imgMgr.DrawLine(this.initFeature[i], this.calFeature[i] );
+
+    var err = this.initFeature[i].clone().sub(this.calFeature[i]);
+    var u = this.calFeature[i].x;
+    var v = this.calFeature[i].y;
+
+    uvBuffer.push([err.x]);
+    uvBuffer.push([err.y]);
+
+    if(Math.abs(err.x) > 1 || Math.abs(err.y) > 1) isCalibrated = false;
+
+    LBuffer.push([]);
+    LBuffer[i].push( lambda / z);
+    LBuffer[i].push( 0 );
+    LBuffer[i].push( -u/z );
+    LBuffer[i].push( -u*v/lambda );
+    LBuffer[i].push( (Math.pow(lambda, 2)+Math.pow(u, 2))/lambda );
+    LBuffer[i].push( -v );
+
+    LBuffer.push([]);
+    LBuffer[i+1].push( 0 );
+    LBuffer[i+1].push( lambda/z );
+    LBuffer[i+1].push( -v/z );
+    LBuffer[i+1].push( (-Math.pow(lambda,2)-Math.pow(v,2))/lambda );
+    LBuffer[i+1].push( u*v/lambda );
+    LBuffer[i+1].push( u );
+  }
+
+
+  var e = Sushi.Matrix.fromArray(uvBuffer);
+  var L = Sushi.Matrix.fromArray(LBuffer);
+
+  if(isCalibrated){
+    //Finish Calibration
+    this.Manager.AppendLog("<h6 style='color:#AA0000'> E </h6><div style='color:green'>" + e.toCSV() );
+    // document.getElementById("LMat").innerHTML =  "<h3 style='color:blue'>Press 'P' to start Calibration </h3> </div>";
+
+    this.Manager.m_bCalibration = false;
+    return{
+      vx:0,
+      vy:0,
+      vz:0,
+      wx:0,
+      wy:0,
+      wz:0
+    };
+  }
+
+
+  var invL = Sushi.Matrix.mul( Sushi.Matrix.mul(L.t(), L).inverse(), L.t() );
+  var resultMat =  Sushi.Matrix.mul(invL, e);
+
+
+  var factorElement = new Array([-1/100000, -1/100000, 1/100, 5, 5, -1/100]);
+  var factorMatrix = Sushi.Matrix.fromArray(factorElement);
+  resultMat = resultMat.mulEach(factorMatrix.t());
+  var result = Sushi.Matrix.toArray( resultMat );
+
+
+  this.Manager.SetLog("E : " + e.toCSV() );
+  this.Manager.AppendLog( "Pseudo Inverse L : " + invL.toCSV() + "<br> result :  " + resultMat.toCSV() );
+
+  return {
+    vx:result[0],
+    vy:result[1],
+    vz:result[2],
+    wx:result[3],
+    wy:result[4],
+    wz:result[5]
+  };
+}
+
+
+E_Tracker.prototype.UpdateFeatureLable = function()
+{
+
+  for(var i=0 ; i<3 ; i++){
+    for(var j=0 ; j< 3-i ; j++ ){
+      if(this.calFeature[j].x > this.calFeature[j+1].x){
+        var temp = this.calFeature[j].clone();
+        this.calFeature[j] = this.calFeature[j+1].clone();
+        this.calFeature[j+1] = temp.clone();
+      }
+    }
+  }
+
+  if(this.calFeature[0].y > this.calFeature[1].y){
+    var temp = this.calFeature[0].clone();
+    this.calFeature[0] = this.calFeature[1].clone();
+    this.calFeature[1] = temp;
+  }
+
+  if(this.calFeature[2].y > this.calFeature[3].y){
+    var temp = this.calFeature[2].clone();
+    this.calFeature[2] = this.calFeature[3].clone();
+    this.calFeature[3] = temp;
+  }
+}
+
+module.exports = E_Tracker;
+
+},{}],5:[function(require,module,exports){
 function E_ImageManager(Mgr)
 {
   this.Manager = Mgr;
@@ -2317,8 +2463,14 @@ function E_ImageManager(Mgr)
 
   this.rtTexture.scissorTest = true;
 
+
+  var viewport = $$("ID_VIEW_LEFT").getNode();
   this.canvas = document.createElement("canvas");
-  this.canvas.setAttribute("id", "canvas2D")
+  viewport.appendChild(this.canvas);
+  // this.canvas.style.backgroundColor ="lightblue"
+  this.canvas.style.position="absolute";
+
+
   this.ctx = this.canvas.getContext('2d');
   this.features = [];
   this.nFeatures = 0;
@@ -2335,8 +2487,7 @@ function E_ImageManager(Mgr)
   this.curr_xy = new Float32Array(100*2);
 
 
-  //Pre-defined features
-
+  this.UpdateSize();
 }
 
 E_ImageManager.prototype.ClearCanvas = function()
@@ -2443,8 +2594,12 @@ E_ImageManager.prototype.Canny = function(imageData)
 E_ImageManager.prototype.Yape06 = function(imageData)
 {
   //Get Canvas Information and Clear CTX
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+
+
+
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize( this.Manager.VIEW_CAM );
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
 
@@ -2501,7 +2656,7 @@ E_ImageManager.prototype.FastCorners = function(imageData)
   //Clear Canvas
   var canvas = this.canvas;
 
-  var rect = this.Manager.GetClientSize( this.Manager.VIEW_CAM );
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
 
@@ -2591,8 +2746,10 @@ E_ImageManager.prototype.OpticalFlow = function(imageData)
 
 E_ImageManager.prototype.UpdateImagePyramid = function()
 {
+
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = canvas.width
   var canvasHeight = canvas.height;
 
@@ -2605,7 +2762,8 @@ E_ImageManager.prototype.UpdateImagePyramid = function()
 E_ImageManager.prototype.DrawFeature = function(x, y)
 {
   var canvas = this.canvas
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
 
@@ -2654,7 +2812,8 @@ E_ImageManager.prototype.DrawInitPoints = function()
 E_ImageManager.prototype.UVToScreen = function(u, v)
 {
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
   var result = [];
@@ -2668,7 +2827,8 @@ E_ImageManager.prototype.UVToScreen = function(u, v)
 E_ImageManager.prototype.ScreenToUV = function(x, y)
 {
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
   var result = [];
@@ -2678,6 +2838,8 @@ E_ImageManager.prototype.ScreenToUV = function(x, y)
 
   return result;
 }
+
+
 
 E_ImageManager.prototype.RenderFakeFeatures = function(camera)
 {
@@ -2723,18 +2885,31 @@ E_ImageManager.prototype.DrawLine = function(p1, p2)
 
 E_ImageManager.prototype.UpdateSize = function()
 {
-  var rect = this.Manager.renderer[0].domElement.getBoundingClientRect();
 
+
+
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   this.canvas.width = rect.right - rect.left;
   this.canvas.height = $$("ID_VIEW_LEFT").$height;
 
-  this.canvas.style.position = "absolute"
-  console.log(this.canvas.style)
+
+  var oL = viewport.offsetLeft.toString() + "px";
+  var oT = viewport.offsetTop.toString() + "px";
+  this.canvas.style.left= oL;
+  this.canvas.style.top= oT;
+
+  //
+  // console.log(viewport.offsetLeft);
+  // console.log(viewport.offsetTop);
+
 }
+
+
 
 module.exports = E_ImageManager;
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 function E_Interactor(Mgr, renderer)
 {
   this.Manager = Mgr;
@@ -2750,11 +2925,12 @@ function E_Interactor(Mgr, renderer)
 
   this.canvas.addEventListener("mousedown", this.onMouseDown.bind(this), false);
   this.canvas.addEventListener("mousemove", this.onMouseMove.bind(this), false);
+  this.Manager.ImageMgr().canvas.addEventListener("mousedown", this.onMouseDown.bind(this), false);
+  this.Manager.ImageMgr().canvas.addEventListener("mousemove", this.onMouseMove.bind(this), false);
 }
 
 E_Interactor.prototype.onMouseDown = function(event)
 {
-  console.log("mouse down")
   this.m_bDown = true;
 
   var mouseX = (event.clientX / window.innerWidth) * 2 - 1;
@@ -2801,11 +2977,6 @@ E_Interactor.prototype.onKeyboardDown = function(event)
 
 E_Interactor.prototype.onKeyboardUp = function(event)
 {
-  if(this.m_keyCode == 80) {
-
-    this.Manager.ToggleModeCalibration(!this.Manager.m_bCalibration);
-  }
-  this.Manager.Redraw();
 
   this.m_keyCode = -1;
 }
@@ -2826,6 +2997,7 @@ E_Interactor.prototype.Update = function()
 E_Interactor.prototype.HandleMouseMove = function()
 {
   var camera = this.Manager.renderer[0].camera;
+  var camera2 = this.Manager.renderer[1].camera;
 
   var xComp = new THREE.Vector2(this.v2Delta.x, 0);
   var yComp = new THREE.Vector2(0, this.v2Delta.y);
@@ -2838,6 +3010,8 @@ E_Interactor.prototype.HandleMouseMove = function()
   var mat = camera.matrix.clone()
   mat.multiply(new THREE.Matrix4().makeRotationAxis(axis , theta));
   camera.rotation.setFromRotationMatrix(mat);
+  camera2.userData.axis.matrix.copy(mat);
+  camera2.userData.helper.matrix.copy(mat);
 
 
   this.Manager.Redraw();
@@ -2859,42 +3033,50 @@ E_Interactor.prototype.HandleKeyEvent = function()
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, 1));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 32: // Space key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, -1));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 87: // W Key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 1, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 83: // S key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, -1, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 65: // A key
       mat.multiply(new THREE.Matrix4().makeTranslation(-1, 0, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 68: // D Key
       mat.multiply(new THREE.Matrix4().makeTranslation(1, 0, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 81: // Q
       mat.multiply(new THREE.Matrix4().makeRotationZ(0.01));
       camera.rotation.setFromRotationMatrix(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
 
     break;
     case 69: // E Key
       mat.multiply(new THREE.Matrix4().makeRotationZ(-0.01));
       camera.rotation.setFromRotationMatrix(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
 
 
@@ -2920,7 +3102,7 @@ module.exports = E_Interactor
 //   Manager.renderer[0].interactor.onMouseMove(event);
 // });
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 var convnetjs = require('convnetjs');
 
 
@@ -3036,7 +3218,7 @@ E_MLManager.prototype.SaveNetwork = function()
 
 module.exports = E_MLManager;
 
-},{"convnetjs":1}],7:[function(require,module,exports){
+},{"convnetjs":1}],8:[function(require,module,exports){
 var E_SocketManager = require('./E_SocketManager.js');
 var E_MLManager = require('./E_MLManager.js');
 var E_ImageManager = require('./E_ImageManager.js');
@@ -3046,6 +3228,7 @@ var E_Interactor = require('./E_Interactor.js');
 
 var E_Image = require('../Core/E_Image.js');
 var E_Axis = require('../Core/E_Axis.js');
+var E_Tracker = require('../Core/E_Tracker.js')
 
 
 //
@@ -3058,6 +3241,7 @@ function E_Manager()
 {
   var m_socketMgr = new E_SocketManager(this);
   var m_imgMgr = new E_ImageManager(this);
+  var m_tracker = new E_Tracker(this);
 
   this.mlMgr = null;
   this.renderer = [];
@@ -3072,6 +3256,11 @@ function E_Manager()
     return m_imgMgr;
   }
 
+  this.Tracker = function()
+  {
+    return m_tracker;
+  }
+
   this.m_bRunTrainning = false;
   this.m_bCalibration = false;
 
@@ -3079,8 +3268,11 @@ function E_Manager()
 
 E_Manager.prototype.Initialize = function()
 {
-  $$("ID_LOG").getNode().style.marginLeft = "50px";
-  $$("ID_LOG").getNode().style.marginTop = "15px";
+  $$("ID_LOG").getNode().style.background = "black"
+  $$("ID_LOG").getNode().style.color = "green"
+  $$("ID_LOG").getNode().style.fontSize = "9px"
+  // $$("ID_LOG").getNode().style.marginLeft = "50px";
+  // $$("ID_LOG").getNode().style.marginTop = "15px";
 
 
   //Initialzie Render Window
@@ -3100,7 +3292,7 @@ E_Manager.prototype.Initialize = function()
     //Add Renderer to The Render Window
     renWin[i].getNode().replaceChild(this.renderer[i].domElement, renWin[i].$view.childNodes[0] );
 
-    console.log(this.renderer[i].domElement);
+    // console.log(this.renderer[i].domElement);
     this.renderer[i].renderWindow = renWin[i];
     this.renderer[i].setClearColor(0x000015);
 
@@ -3114,13 +3306,15 @@ E_Manager.prototype.Initialize = function()
 
   var camera1 = this.renderer[0].camera;
   var camera2 = this.renderer[1].camera;
-  camera2.userData.axis = new E_Axis();
-  camera2.userData.helper = new THREE.CameraHelper(camera1);
-  var dist = 90 / 1200;
-  camera2.userData.helper.geometry.scale(dist, dist, dist);
-  camera2.userData.axis.matrixAutoUpdate = false;
 
+
+  camera2.userData.axis = new E_Axis();
+  camera2.userData.axis.matrixAutoUpdate = false;
   this.renderer[1].scene.add(camera2.userData.axis);
+
+  camera2.userData.helper = new THREE.CameraHelper(camera1);
+  // var dist = 90 / 1200;
+  // camera2.userData.helper.geometry.scale(dist, dist, dist);
   this.renderer[1].scene.add(camera2.userData.helper);
 
   this.UpdateWindowSize();
@@ -3159,10 +3353,8 @@ E_Manager.prototype.InitObject = function()
 
 
   camera.position.setFromMatrixPosition(new THREE.Matrix4().makeTranslation(4, 50, 40));
-  camera.rotation.setFromRotationMatrix(new THREE.Matrix4().makeRotationX(-Math.PI/3));
+  camera.rotation.setFromRotationMatrix(new THREE.Matrix4().makeRotationX(-Math.PI/2));
 
-
-  //camera2.position.y = 100;
   camera2.position.x = -150;
   camera2.position.z = 150;
   camera2.position.y = 65;
@@ -3191,6 +3383,7 @@ E_Manager.prototype.Redraw = function()
   camera1 = this.renderer[0].camera;
   camera2 = this.renderer[1].camera;
 
+
   // camera2.userData.axis.matrix.copy(camera2.matrixWorld.clone());
   var lookAt =  camera1.position.clone().sub( new THREE.Vector3(0, 0, 0)).multiplyScalar(0.5);
   camera2.lookAt( lookAt );
@@ -3201,13 +3394,10 @@ E_Manager.prototype.Redraw = function()
   camera2.updateProjectionMatrix();
 
 
-  if(!this.m_bCalibration){
-    this.ImageMgr().ClearCanvas();
-  }else{
-    this.ImageMgr().RenderFakeFeatures(camera1);
+  if(!this.m_bCalibration) {this.ImageMgr().ClearCanvas();}
 
-    this.ImageMgr().DrawInitPoints();
-  }
+  this.ImageMgr().RenderFakeFeatures(camera1);
+  this.ImageMgr().DrawInitPoints();
 }
 
 E_Manager.prototype.Animate = function()
@@ -3219,6 +3409,32 @@ E_Manager.prototype.Animate = function()
     this.RunCalibration();
   }
   requestAnimationFrame( this.Animate.bind(this) );
+}
+
+
+E_Manager.prototype.RunCalibration = function()
+{
+  this.ImageMgr().ClearCanvas();
+  var camera = this.renderer[0].camera;
+  var camera2 = this.renderer[1].camera;
+  var trans = camera.matrix.clone();
+  var rot = camera.matrix.clone();
+  var velocity = this.Tracker().CalculateVelocity(camera);
+
+
+  var scalefactor = 200000;
+  rot.multiply(new THREE.Matrix4().makeRotationX(velocity.wx ));
+  rot.multiply(new THREE.Matrix4().makeRotationY(velocity.wy ));
+  rot.multiply(new THREE.Matrix4().makeRotationZ(velocity.wz ));
+  camera.rotation.setFromRotationMatrix(rot);
+
+
+  trans.multiply(new THREE.Matrix4().makeTranslation(velocity.vx, velocity.vy, velocity.vz ));
+  camera.position.setFromMatrixPosition(trans);
+
+  camera2.userData.axis.matrix.copy(camera.matrix.clone());
+
+  this.Redraw();
 }
 
 
@@ -3253,9 +3469,15 @@ E_Manager.prototype.OnRunTrainning = function(value)
   }
 }
 
+
+E_Manager.prototype.OnRunCalibration = function(value)
+{
+  this.m_bCalibration = value;
+}
+
 module.exports = E_Manager;
 
-},{"../Core/E_Axis.js":2,"../Core/E_Image.js":3,"./E_ImageManager.js":4,"./E_Interactor.js":5,"./E_MLManager.js":6,"./E_SocketManager.js":8}],8:[function(require,module,exports){
+},{"../Core/E_Axis.js":2,"../Core/E_Image.js":3,"../Core/E_Tracker.js":4,"./E_ImageManager.js":5,"./E_Interactor.js":6,"./E_MLManager.js":7,"./E_SocketManager.js":9}],9:[function(require,module,exports){
 function E_SocketManager(Mgr)
 {
   this.Mgr = Mgr;
@@ -3298,7 +3520,7 @@ E_SocketManager.prototype.EmitData = function(signal, data)
 
 module.exports = E_SocketManager;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 var E_Manager = require('./E_Manager.js');
 
 
@@ -3312,18 +3534,22 @@ var l_toolBar = {view:"toolbar",
                   { id:"ID_TOGGLE_TRAINNING",view:"toggle", type:"iconButton", name:"s4", width:150,
                       offIcon:"play",  onIcon:"pause",
                       offLabel:"Run Trainning", onLabel:"Stop Trainning"
+                  },
+                  { id:"ID_TOGGLE_CALIBRATION",view:"toggle", type:"iconButton", name:"s4", width:150,
+                      offIcon:"play",  onIcon:"pause",
+                      offLabel:"Run Calibration", onLabel:"Stop Calibration"
                   }
                 ]};
 
 
 //Left Viewport : Visualize Original Mesh
-var l_leftMenu = {id:"ID_VIEW_LEFT", view:"template"};
+var l_leftMenu = {id:"ID_VIEW_LEFT", view:"template", gravity:1.8};
 
 //Right Viewport : Visuzlize Voxelized Mesh
 var l_rightMenu = {id:"ID_VIEW_RIGHT", view:"template"};
 
 //Log Menuv
-var l_logMenu = {id:"ID_LOG", view:"template", gravity:0.5};
+var l_logMenu = {id:"ID_LOG", view:"template", gravity:0.2};
 
 var layout = new webix.ui({
   rows:[
@@ -3373,6 +3599,11 @@ $$("ID_TOGGLE_TRAINNING").attachEvent("onItemClick", function(id){
   Manager.OnRunTrainning(this.getValue());
 });
 
+$$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
+  Manager.OnRunCalibration(this.getValue());
+});
+
+
 
 $(window).mouseup(function(event){
   Manager.renderer[0].interactor.onMouseUp(event);
@@ -3386,4 +3617,4 @@ $(window).keyup(function(event){
   Manager.renderer[0].interactor.onKeyboardUp(event);
 });
 
-},{"./E_Manager.js":7}]},{},[9]);
+},{"./E_Manager.js":8}]},{},[10]);

@@ -11,8 +11,14 @@ function E_ImageManager(Mgr)
 
   this.rtTexture.scissorTest = true;
 
+
+  var viewport = $$("ID_VIEW_LEFT").getNode();
   this.canvas = document.createElement("canvas");
-  this.canvas.setAttribute("id", "canvas2D")
+  viewport.appendChild(this.canvas);
+  // this.canvas.style.backgroundColor ="lightblue"
+  this.canvas.style.position="absolute";
+
+
   this.ctx = this.canvas.getContext('2d');
   this.features = [];
   this.nFeatures = 0;
@@ -29,8 +35,7 @@ function E_ImageManager(Mgr)
   this.curr_xy = new Float32Array(100*2);
 
 
-  //Pre-defined features
-
+  this.UpdateSize();
 }
 
 E_ImageManager.prototype.ClearCanvas = function()
@@ -137,8 +142,12 @@ E_ImageManager.prototype.Canny = function(imageData)
 E_ImageManager.prototype.Yape06 = function(imageData)
 {
   //Get Canvas Information and Clear CTX
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+
+
+
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize( this.Manager.VIEW_CAM );
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
 
@@ -195,7 +204,7 @@ E_ImageManager.prototype.FastCorners = function(imageData)
   //Clear Canvas
   var canvas = this.canvas;
 
-  var rect = this.Manager.GetClientSize( this.Manager.VIEW_CAM );
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
 
@@ -285,8 +294,10 @@ E_ImageManager.prototype.OpticalFlow = function(imageData)
 
 E_ImageManager.prototype.UpdateImagePyramid = function()
 {
+
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = canvas.width
   var canvasHeight = canvas.height;
 
@@ -299,7 +310,8 @@ E_ImageManager.prototype.UpdateImagePyramid = function()
 E_ImageManager.prototype.DrawFeature = function(x, y)
 {
   var canvas = this.canvas
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
 
@@ -348,7 +360,8 @@ E_ImageManager.prototype.DrawInitPoints = function()
 E_ImageManager.prototype.UVToScreen = function(u, v)
 {
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
   var result = [];
@@ -362,7 +375,8 @@ E_ImageManager.prototype.UVToScreen = function(u, v)
 E_ImageManager.prototype.ScreenToUV = function(x, y)
 {
   var canvas = this.canvas;
-  var rect = this.Manager.GetClientSize(this.Manager.VIEW_CAM);
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   var canvasWidth = rect.right - rect.left;
   var canvasHeight = canvas.height;
   var result = [];
@@ -372,6 +386,8 @@ E_ImageManager.prototype.ScreenToUV = function(x, y)
 
   return result;
 }
+
+
 
 E_ImageManager.prototype.RenderFakeFeatures = function(camera)
 {
@@ -417,12 +433,26 @@ E_ImageManager.prototype.DrawLine = function(p1, p2)
 
 E_ImageManager.prototype.UpdateSize = function()
 {
-  var rect = this.Manager.renderer[0].domElement.getBoundingClientRect();
 
+
+
+  viewport =  $$("ID_VIEW_LEFT").getNode();
+  var rect = viewport.getBoundingClientRect();
   this.canvas.width = rect.right - rect.left;
   this.canvas.height = $$("ID_VIEW_LEFT").$height;
 
-  console.log(this.canvas);
+
+  var oL = viewport.offsetLeft.toString() + "px";
+  var oT = viewport.offsetTop.toString() + "px";
+  this.canvas.style.left= oL;
+  this.canvas.style.top= oT;
+
+  //
+  // console.log(viewport.offsetLeft);
+  // console.log(viewport.offsetTop);
+
 }
+
+
 
 module.exports = E_ImageManager;

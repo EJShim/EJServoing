@@ -13,11 +13,12 @@ function E_Interactor(Mgr, renderer)
 
   this.canvas.addEventListener("mousedown", this.onMouseDown.bind(this), false);
   this.canvas.addEventListener("mousemove", this.onMouseMove.bind(this), false);
+  this.Manager.ImageMgr().canvas.addEventListener("mousedown", this.onMouseDown.bind(this), false);
+  this.Manager.ImageMgr().canvas.addEventListener("mousemove", this.onMouseMove.bind(this), false);
 }
 
 E_Interactor.prototype.onMouseDown = function(event)
 {
-  console.log("mouse down")
   this.m_bDown = true;
 
   var mouseX = (event.clientX / window.innerWidth) * 2 - 1;
@@ -64,11 +65,6 @@ E_Interactor.prototype.onKeyboardDown = function(event)
 
 E_Interactor.prototype.onKeyboardUp = function(event)
 {
-  if(this.m_keyCode == 80) {
-
-    this.Manager.ToggleModeCalibration(!this.Manager.m_bCalibration);
-  }
-  this.Manager.Redraw();
 
   this.m_keyCode = -1;
 }
@@ -89,6 +85,7 @@ E_Interactor.prototype.Update = function()
 E_Interactor.prototype.HandleMouseMove = function()
 {
   var camera = this.Manager.renderer[0].camera;
+  var camera2 = this.Manager.renderer[1].camera;
 
   var xComp = new THREE.Vector2(this.v2Delta.x, 0);
   var yComp = new THREE.Vector2(0, this.v2Delta.y);
@@ -101,6 +98,8 @@ E_Interactor.prototype.HandleMouseMove = function()
   var mat = camera.matrix.clone()
   mat.multiply(new THREE.Matrix4().makeRotationAxis(axis , theta));
   camera.rotation.setFromRotationMatrix(mat);
+  camera2.userData.axis.matrix.copy(mat);
+  camera2.userData.helper.matrix.copy(mat);
 
 
   this.Manager.Redraw();
@@ -122,42 +121,50 @@ E_Interactor.prototype.HandleKeyEvent = function()
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, 1));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 32: // Space key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, -1));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 87: // W Key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 1, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 83: // S key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, -1, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 65: // A key
       mat.multiply(new THREE.Matrix4().makeTranslation(-1, 0, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 68: // D Key
       mat.multiply(new THREE.Matrix4().makeTranslation(1, 0, 0));
       camera.position.setFromMatrixPosition(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
     case 81: // Q
       mat.multiply(new THREE.Matrix4().makeRotationZ(0.01));
       camera.rotation.setFromRotationMatrix(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
 
     break;
     case 69: // E Key
       mat.multiply(new THREE.Matrix4().makeRotationZ(-0.01));
       camera.rotation.setFromRotationMatrix(mat);
       camera2.userData.axis.matrix.copy(mat);
+      camera2.userData.helper.matrix.copy(mat);
     break;
 
 

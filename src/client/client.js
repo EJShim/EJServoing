@@ -11,18 +11,22 @@ var l_toolBar = {view:"toolbar",
                   { id:"ID_TOGGLE_TRAINNING",view:"toggle", type:"iconButton", name:"s4", width:150,
                       offIcon:"play",  onIcon:"pause",
                       offLabel:"Run Trainning", onLabel:"Stop Trainning"
+                  },
+                  { id:"ID_TOGGLE_CALIBRATION",view:"toggle", type:"iconButton", name:"s4", width:150,
+                      offIcon:"play",  onIcon:"pause",
+                      offLabel:"Run Calibration", onLabel:"Stop Calibration"
                   }
                 ]};
 
 
 //Left Viewport : Visualize Original Mesh
-var l_leftMenu = {id:"ID_VIEW_LEFT", view:"template"};
+var l_leftMenu = {id:"ID_VIEW_LEFT", view:"template", gravity:1.8};
 
 //Right Viewport : Visuzlize Voxelized Mesh
 var l_rightMenu = {id:"ID_VIEW_RIGHT", view:"template"};
 
 //Log Menuv
-var l_logMenu = {id:"ID_LOG", view:"template", gravity:0.5};
+var l_logMenu = {id:"ID_LOG", view:"template", gravity:0.2};
 
 var layout = new webix.ui({
   rows:[
@@ -71,6 +75,11 @@ $$("ID_LOG").attachEvent("onViewResize", function(){
 $$("ID_TOGGLE_TRAINNING").attachEvent("onItemClick", function(id){
   Manager.OnRunTrainning(this.getValue());
 });
+
+$$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
+  Manager.OnRunCalibration(this.getValue());
+});
+
 
 
 $(window).mouseup(function(event){

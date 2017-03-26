@@ -7,6 +7,7 @@ var E_Interactor = require('./E_Interactor.js');
 
 var E_Image = require('../Core/E_Image.js');
 var E_Axis = require('../Core/E_Axis.js');
+var E_Tracker = require('../Core/E_Tracker.js')
 
 
 //
@@ -19,6 +20,7 @@ function E_Manager()
 {
   var m_socketMgr = new E_SocketManager(this);
   var m_imgMgr = new E_ImageManager(this);
+  var m_tracker = new E_Tracker(this);
 
   this.mlMgr = null;
   this.renderer = [];
@@ -33,6 +35,11 @@ function E_Manager()
     return m_imgMgr;
   }
 
+  this.Tracker = function()
+  {
+    return m_tracker;
+  }
+
   this.m_bRunTrainning = false;
   this.m_bCalibration = false;
 
@@ -40,8 +47,11 @@ function E_Manager()
 
 E_Manager.prototype.Initialize = function()
 {
-  $$("ID_LOG").getNode().style.marginLeft = "50px";
-  $$("ID_LOG").getNode().style.marginTop = "15px";
+  $$("ID_LOG").getNode().style.background = "black"
+  $$("ID_LOG").getNode().style.color = "green"
+  $$("ID_LOG").getNode().style.fontSize = "9px"
+  // $$("ID_LOG").getNode().style.marginLeft = "50px";
+  // $$("ID_LOG").getNode().style.marginTop = "15px";
 
 
   //Initialzie Render Window
@@ -61,7 +71,7 @@ E_Manager.prototype.Initialize = function()
     //Add Renderer to The Render Window
     renWin[i].getNode().replaceChild(this.renderer[i].domElement, renWin[i].$view.childNodes[0] );
 
-    console.log(this.renderer[i].domElement);
+    // console.log(this.renderer[i].domElement);
     this.renderer[i].renderWindow = renWin[i];
     this.renderer[i].setClearColor(0x000015);
 
@@ -75,13 +85,15 @@ E_Manager.prototype.Initialize = function()
 
   var camera1 = this.renderer[0].camera;
   var camera2 = this.renderer[1].camera;
-  camera2.userData.axis = new E_Axis();
-  camera2.userData.helper = new THREE.CameraHelper(camera1);
-  var dist = 90 / 1200;
-  camera2.userData.helper.geometry.scale(dist, dist, dist);
-  camera2.userData.axis.matrixAutoUpdate = false;
 
+
+  camera2.userData.axis = new E_Axis();
+  camera2.userData.axis.matrixAutoUpdate = false;
   this.renderer[1].scene.add(camera2.userData.axis);
+
+  camera2.userData.helper = new THREE.CameraHelper(camera1);
+  // var dist = 90 / 1200;
+  // camera2.userData.helper.geometry.scale(dist, dist, dist);
   this.renderer[1].scene.add(camera2.userData.helper);
 
   this.UpdateWindowSize();
@@ -120,10 +132,8 @@ E_Manager.prototype.InitObject = function()
 
 
   camera.position.setFromMatrixPosition(new THREE.Matrix4().makeTranslation(4, 50, 40));
-  camera.rotation.setFromRotationMatrix(new THREE.Matrix4().makeRotationX(-Math.PI/3));
+  camera.rotation.setFromRotationMatrix(new THREE.Matrix4().makeRotationX(-Math.PI/2));
 
-
-  //camera2.position.y = 100;
   camera2.position.x = -150;
   camera2.position.z = 150;
   camera2.position.y = 65;
@@ -152,6 +162,7 @@ E_Manager.prototype.Redraw = function()
   camera1 = this.renderer[0].camera;
   camera2 = this.renderer[1].camera;
 
+
   // camera2.userData.axis.matrix.copy(camera2.matrixWorld.clone());
   var lookAt =  camera1.position.clone().sub( new THREE.Vector3(0, 0, 0)).multiplyScalar(0.5);
   camera2.lookAt( lookAt );
@@ -162,13 +173,10 @@ E_Manager.prototype.Redraw = function()
   camera2.updateProjectionMatrix();
 
 
-  if(!this.m_bCalibration){
-    this.ImageMgr().ClearCanvas();
-  }else{
-    this.ImageMgr().RenderFakeFeatures(camera1);
+  if(!this.m_bCalibration) {this.ImageMgr().ClearCanvas();}
 
-    this.ImageMgr().DrawInitPoints();
-  }
+  this.ImageMgr().RenderFakeFeatures(camera1);
+  this.ImageMgr().DrawInitPoints();
 }
 
 E_Manager.prototype.Animate = function()
@@ -180,6 +188,32 @@ E_Manager.prototype.Animate = function()
     this.RunCalibration();
   }
   requestAnimationFrame( this.Animate.bind(this) );
+}
+
+
+E_Manager.prototype.RunCalibration = function()
+{
+  this.ImageMgr().ClearCanvas();
+  var camera = this.renderer[0].camera;
+  var camera2 = this.renderer[1].camera;
+  var trans = camera.matrix.clone();
+  var rot = camera.matrix.clone();
+  var velocity = this.Tracker().CalculateVelocity(camera);
+
+
+  var scalefactor = 200000;
+  rot.multiply(new THREE.Matrix4().makeRotationX(velocity.wx ));
+  rot.multiply(new THREE.Matrix4().makeRotationY(velocity.wy ));
+  rot.multiply(new THREE.Matrix4().makeRotationZ(velocity.wz ));
+  camera.rotation.setFromRotationMatrix(rot);
+
+
+  trans.multiply(new THREE.Matrix4().makeTranslation(velocity.vx, velocity.vy, velocity.vz ));
+  camera.position.setFromMatrixPosition(trans);
+
+  camera2.userData.axis.matrix.copy(camera.matrix.clone());
+
+  this.Redraw();
 }
 
 
@@ -212,6 +246,12 @@ E_Manager.prototype.OnRunTrainning = function(value)
   }else{
     this.m_bRunTrainning = false;
   }
+}
+
+
+E_Manager.prototype.OnRunCalibration = function(value)
+{
+  this.m_bCalibration = value;
 }
 
 module.exports = E_Manager;
