@@ -15,6 +15,9 @@ var l_toolBar = {view:"toolbar",
                   { id:"ID_TOGGLE_CALIBRATION",view:"toggle", type:"iconButton", name:"s4", width:150,
                       offIcon:"play",  onIcon:"pause",
                       offLabel:"Run Calibration", onLabel:"Stop Calibration"
+                  },
+                  {
+                    id:"ID_BUTTON_GLOBAL_ANSWER", view:"button", value:"Calibration (using NN)", width:150
                   }
                 ]};
 
@@ -78,6 +81,10 @@ $$("ID_TOGGLE_TRAINNING").attachEvent("onItemClick", function(id){
 
 $$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
   Manager.OnRunCalibration(this.getValue());
+});
+
+$$("ID_BUTTON_GLOBAL_ANSWER").attachEvent("onItemClick", function(id){
+  Manager.NNCalibration();
 });
 
 

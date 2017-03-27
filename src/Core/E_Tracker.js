@@ -76,7 +76,7 @@ E_Tracker.prototype.CalculateVelocity = function(camera)
 
   if(isCalibrated){
     //Finish Calibration
-    this.Manager.AppendLog("<h6 style='color:#AA0000'> E </h6><div style='color:green'>" + e.toCSV() );
+    this.Manager.SetLog("E : " + e.toCSV() );
     // document.getElementById("LMat").innerHTML =  "<h3 style='color:blue'>Press 'P' to start Calibration </h3> </div>";
 
     this.Manager.m_bCalibration = false;
@@ -101,8 +101,8 @@ E_Tracker.prototype.CalculateVelocity = function(camera)
   var result = Sushi.Matrix.toArray( resultMat );
 
 
-  this.Manager.SetLog("E : " + e.toCSV() );
-  this.Manager.AppendLog( "Pseudo Inverse L : " + invL.toCSV() + "<br> result :  " + resultMat.toCSV() );
+  this.Manager.SetLog("<strong>E<strong> : " + e.toCSV() );
+  this.Manager.AppendLog( "<br> <strong>Pseudo Inverse L<strong> <br> : " + invL.toCSV() + "<br> result :  " + resultMat.toCSV() );
 
   return {
     vx:result[0],

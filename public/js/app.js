@@ -2382,7 +2382,7 @@ E_Tracker.prototype.CalculateVelocity = function(camera)
 
   if(isCalibrated){
     //Finish Calibration
-    this.Manager.AppendLog("<h6 style='color:#AA0000'> E </h6><div style='color:green'>" + e.toCSV() );
+    this.Manager.SetLog("E : " + e.toCSV() );
     // document.getElementById("LMat").innerHTML =  "<h3 style='color:blue'>Press 'P' to start Calibration </h3> </div>";
 
     this.Manager.m_bCalibration = false;
@@ -2407,8 +2407,8 @@ E_Tracker.prototype.CalculateVelocity = function(camera)
   var result = Sushi.Matrix.toArray( resultMat );
 
 
-  this.Manager.SetLog("E : " + e.toCSV() );
-  this.Manager.AppendLog( "Pseudo Inverse L : " + invL.toCSV() + "<br> result :  " + resultMat.toCSV() );
+  this.Manager.SetLog("<strong>E<strong> : " + e.toCSV() );
+  this.Manager.AppendLog( "<br> <strong>Pseudo Inverse L<strong> <br> : " + invL.toCSV() + "<br> result :  " + resultMat.toCSV() );
 
   return {
     vx:result[0],
@@ -3408,9 +3408,32 @@ E_Manager.prototype.Animate = function()
   if(this.m_bCalibration){
     this.RunCalibration();
   }
+
+  if(this.m_bRunTrainning){
+    this.RunTraining();
+  }
+
+
   requestAnimationFrame( this.Animate.bind(this) );
 }
 
+E_Manager.prototype.RunTraining = function()
+{
+  var camera = this.renderer[0].camera;
+
+  var matrix = camera.matrix.elements;
+  var log = "";
+
+  for(var i in matrix){
+    if(i % 4 === 0){
+      log += "<br>"
+    }
+    log += matrix[i] + "<strong>//</strong>"
+  }
+
+  this.SetLog(log);
+  this.AppendLog("<br><br>" + matrix);
+}
 
 E_Manager.prototype.RunCalibration = function()
 {
@@ -3449,6 +3472,25 @@ E_Manager.prototype.Frand = function(min, max)
   return value;
 }
 
+E_Manager.prototype.NNCalibration = function()
+{
+  var globalmax = "[0.99999998211860657, 0.0005886557628400624, 0.0000024272976588690653, 0, -2.329772001985475e-7, 0.004519194730209017, 0.9999898076057434, 0,-0.00058866071049124, 0.9999896287918091, 0.0045191943645477295, 0,-0.052400823682546616, 48.713191986083984, 0.02711086571216583, 1]"
+  var globalArr = JSON.parse(globalmax)
+  var globalMat = new THREE.Matrix4();
+  globalMat.elements = globalArr;
+
+  var camera = this.renderer[0].camera;
+  // console.log(globalMat);
+
+
+
+  camera.matrixAutoUpdate = false;
+  camera.matrix.copy(globalMat);
+
+  this.Redraw();
+
+  camera.matrixAutoUpdate = true;
+}
 
 E_Manager.prototype.SetLog = function(text)
 {
@@ -3538,6 +3580,9 @@ var l_toolBar = {view:"toolbar",
                   { id:"ID_TOGGLE_CALIBRATION",view:"toggle", type:"iconButton", name:"s4", width:150,
                       offIcon:"play",  onIcon:"pause",
                       offLabel:"Run Calibration", onLabel:"Stop Calibration"
+                  },
+                  {
+                    id:"ID_BUTTON_GLOBAL_ANSWER", view:"button", value:"Calibration (using NN)", width:150
                   }
                 ]};
 
@@ -3601,6 +3646,10 @@ $$("ID_TOGGLE_TRAINNING").attachEvent("onItemClick", function(id){
 
 $$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
   Manager.OnRunCalibration(this.getValue());
+});
+
+$$("ID_BUTTON_GLOBAL_ANSWER").attachEvent("onItemClick", function(id){
+  Manager.NNCalibration();
 });
 
 

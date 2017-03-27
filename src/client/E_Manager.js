@@ -187,9 +187,32 @@ E_Manager.prototype.Animate = function()
   if(this.m_bCalibration){
     this.RunCalibration();
   }
+
+  if(this.m_bRunTrainning){
+    this.RunTraining();
+  }
+
+
   requestAnimationFrame( this.Animate.bind(this) );
 }
 
+E_Manager.prototype.RunTraining = function()
+{
+  var camera = this.renderer[0].camera;
+
+  var matrix = camera.matrix.elements;
+  var log = "";
+
+  for(var i in matrix){
+    if(i % 4 === 0){
+      log += "<br>"
+    }
+    log += matrix[i] + "<strong>//</strong>"
+  }
+
+  this.SetLog(log);
+  this.AppendLog("<br><br>" + matrix);
+}
 
 E_Manager.prototype.RunCalibration = function()
 {
@@ -228,6 +251,25 @@ E_Manager.prototype.Frand = function(min, max)
   return value;
 }
 
+E_Manager.prototype.NNCalibration = function()
+{
+  var globalmax = "[0.99999998211860657, 0.0005886557628400624, 0.0000024272976588690653, 0, -2.329772001985475e-7, 0.004519194730209017, 0.9999898076057434, 0,-0.00058866071049124, 0.9999896287918091, 0.0045191943645477295, 0,-0.052400823682546616, 48.713191986083984, 0.02711086571216583, 1]"
+  var globalArr = JSON.parse(globalmax)
+  var globalMat = new THREE.Matrix4();
+  globalMat.elements = globalArr;
+
+  var camera = this.renderer[0].camera;
+  // console.log(globalMat);
+
+
+
+  camera.matrixAutoUpdate = false;
+  camera.matrix.copy(globalMat);
+
+  this.Redraw();
+
+  camera.matrixAutoUpdate = true;
+}
 
 E_Manager.prototype.SetLog = function(text)
 {
