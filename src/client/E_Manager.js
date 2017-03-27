@@ -88,7 +88,6 @@ E_Manager.prototype.Initialize = function()
 
 
   camera2.userData.axis = new E_Axis();
-  camera2.userData.axis.matrixAutoUpdate = false;
   this.renderer[1].scene.add(camera2.userData.axis);
 
   camera2.userData.helper = new THREE.CameraHelper(camera1);
@@ -154,10 +153,6 @@ E_Manager.prototype.UpdateWindowSize = function()
 
 E_Manager.prototype.Redraw = function()
 {
-  //Redraw
-  for(var i=0 ; i<2 ; i++){
-    this.renderer[i].render(this.renderer[i].scene, this.renderer[i].camera);
-  }
 
   camera1 = this.renderer[0].camera;
   camera2 = this.renderer[1].camera;
@@ -166,6 +161,8 @@ E_Manager.prototype.Redraw = function()
   // camera2.userData.axis.matrix.copy(camera2.matrixWorld.clone());
   var lookAt =  camera1.position.clone().sub( new THREE.Vector3(0, 0, 0)).multiplyScalar(0.5);
   camera2.lookAt( lookAt );
+  camera2.userData.axis.position.setFromMatrixPosition(camera1.matrix.clone());
+  camera2.userData.axis.rotation.setFromRotationMatrix(camera1.matrix.clone());
   var vec1 = camera1.position.clone().sub(camera2.position);
   var vec2 = lookAt.clone().sub(camera2.position);
   var eFov = Math.acos(vec1.clone().normalize().dot(vec2.clone().normalize())) * 3 ;
@@ -173,10 +170,20 @@ E_Manager.prototype.Redraw = function()
   camera2.updateProjectionMatrix();
 
 
-  if(!this.m_bCalibration) {this.ImageMgr().ClearCanvas();}
 
+  //Redraw
+  for(var i=0 ; i<2 ; i++){
+    this.renderer[i].render(this.renderer[i].scene, this.renderer[i].camera);
+  }
+
+
+
+  //Update 2d Canvas
+  if(!this.m_bCalibration) {this.ImageMgr().ClearCanvas();}
   this.ImageMgr().RenderFakeFeatures(camera1);
   this.ImageMgr().DrawInitPoints();
+
+
 }
 
 E_Manager.prototype.Animate = function()
@@ -200,7 +207,7 @@ E_Manager.prototype.RunTraining = function()
 {
   var camera = this.renderer[0].camera;
 
-  var matrix = camera.matrix.elements;
+  var matrix = camera.matrixWorld.elements;
   var log = "";
 
   for(var i in matrix){
@@ -234,8 +241,6 @@ E_Manager.prototype.RunCalibration = function()
   trans.multiply(new THREE.Matrix4().makeTranslation(velocity.vx, velocity.vy, velocity.vz ));
   camera.position.setFromMatrixPosition(trans);
 
-  camera2.userData.axis.matrix.copy(camera.matrix.clone());
-
   this.Redraw();
 }
 
@@ -253,22 +258,30 @@ E_Manager.prototype.Frand = function(min, max)
 
 E_Manager.prototype.NNCalibration = function()
 {
+  var camera = this.renderer[0].camera;
+
+  //Get Global Annotation Matrix
   var globalmax = "[0.99999998211860657, 0.0005886557628400624, 0.0000024272976588690653, 0, -2.329772001985475e-7, 0.004519194730209017, 0.9999898076057434, 0,-0.00058866071049124, 0.9999896287918091, 0.0045191943645477295, 0,-0.052400823682546616, 48.713191986083984, 0.02711086571216583, 1]"
   var globalArr = JSON.parse(globalmax)
   var globalMat = new THREE.Matrix4();
   globalMat.elements = globalArr;
 
-  var camera = this.renderer[0].camera;
-  // console.log(globalMat);
+  var currentMat = camera.matrix.clone();
+  var invCur = new THREE.Matrix4().getInverse(currentMat, true);
 
+  // This Translation Matrix will be the Annotation of Deep Learning
+  var trans = invCur.clone().multiply(globalMat);
 
+  // Predicted Matrix will be Applied like this way
+  currentMat.multiply(trans);
 
-  camera.matrixAutoUpdate = false;
-  camera.matrix.copy(globalMat);
+  //Update Camear Transformation
+  camera.position.setFromMatrixPosition(currentMat);
+  camera.rotation.setFromRotationMatrix(currentMat);
 
   this.Redraw();
 
-  camera.matrixAutoUpdate = true;
+  // camera.matrixAutoUpdate = true;
 }
 
 E_Manager.prototype.SetLog = function(text)

@@ -108,7 +108,6 @@ E_Interactor.prototype.HandleMouseMove = function()
 E_Interactor.prototype.HandleKeyEvent = function()
 {
   var camera = this.Manager.renderer[0].camera;
-  var camera2 = this.Manager.renderer[1].camera;
 
   var mat = camera.matrix.clone();
 
@@ -120,51 +119,35 @@ E_Interactor.prototype.HandleKeyEvent = function()
     case 67: // c
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, 1));
       camera.position.setFromMatrixPosition(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
     break;
     case 32: // Space key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, -1));
       camera.position.setFromMatrixPosition(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
     break;
     case 87: // W Key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 1, 0));
       camera.position.setFromMatrixPosition(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
     break;
     case 83: // S key
       mat.multiply(new THREE.Matrix4().makeTranslation(0, -1, 0));
       camera.position.setFromMatrixPosition(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
     break;
     case 65: // A key
       mat.multiply(new THREE.Matrix4().makeTranslation(-1, 0, 0));
       camera.position.setFromMatrixPosition(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
     break;
     case 68: // D Key
       mat.multiply(new THREE.Matrix4().makeTranslation(1, 0, 0));
       camera.position.setFromMatrixPosition(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
     break;
     case 81: // Q
       mat.multiply(new THREE.Matrix4().makeRotationZ(0.01));
       camera.rotation.setFromRotationMatrix(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
 
     break;
     case 69: // E Key
       mat.multiply(new THREE.Matrix4().makeRotationZ(-0.01));
       camera.rotation.setFromRotationMatrix(mat);
-      camera2.userData.axis.matrix.copy(mat);
-      camera2.userData.helper.matrix.copy(mat);
     break;
 
 
