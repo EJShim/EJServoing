@@ -102,20 +102,25 @@ E_Interactor.prototype.HandleMouseMove = function()
   camera2.userData.helper.matrix.copy(mat);
 
 
+
+  //Trainning Data
+  if(this.Manager.m_bRunTrainning){
+    this.Manager.RunTraining();
+  }
+
   this.Manager.Redraw();
 }
 
 E_Interactor.prototype.HandleKeyEvent = function()
 {
-  var camera = this.Manager.renderer[0].camera;
+  if(this.m_keyCode === -1) return;
 
+
+  var camera = this.Manager.renderer[0].camera;
   var mat = camera.matrix.clone();
 
 
   switch (this.m_keyCode) {
-    case -1:
-      return;
-    break;
     case 67: // c
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, 1));
       camera.position.setFromMatrixPosition(mat);
@@ -149,10 +154,13 @@ E_Interactor.prototype.HandleKeyEvent = function()
       mat.multiply(new THREE.Matrix4().makeRotationZ(-0.01));
       camera.rotation.setFromRotationMatrix(mat);
     break;
-
-
     default:
     break;
+  }
+
+  //Trainning Data
+  if(this.Manager.m_bRunTrainning){
+    this.Manager.RunTraining();
   }
 
 

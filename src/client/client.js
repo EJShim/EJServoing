@@ -7,14 +7,16 @@ var E_Manager = require('./E_Manager.js');
 //Toolbar
 var l_toolBar = {view:"toolbar",
                 elements:[
-                  //Toggle Run Random Learning
-                  { id:"ID_TOGGLE_TRAINNING",view:"toggle", type:"iconButton", name:"s4", width:150,
-                      offIcon:"play",  onIcon:"pause",
-                      offLabel:"Run Trainning", onLabel:"Stop Trainning"
+                  {
+                    id:"ID_BUTTON_GROUND_TRUTH", view:"button", value:"Ground Truth", width:150
                   },
                   { id:"ID_TOGGLE_CALIBRATION",view:"toggle", type:"iconButton", name:"s4", width:150,
                       offIcon:"play",  onIcon:"pause",
                       offLabel:"Run Calibration", onLabel:"Stop Calibration"
+                  },
+                  { id:"ID_TOGGLE_TRAINNING",view:"toggle", type:"iconButton", name:"s4", width:150,
+                      offIcon:"play",  onIcon:"pause",
+                      offLabel:"Run Trainning", onLabel:"Stop Trainning"
                   },
                   {
                     id:"ID_BUTTON_GLOBAL_ANSWER", view:"button", value:"Calibration (using NN)", width:150
@@ -85,6 +87,10 @@ $$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
 
 $$("ID_BUTTON_GLOBAL_ANSWER").attachEvent("onItemClick", function(id){
   Manager.NNCalibration();
+});
+
+$$("ID_BUTTON_GROUND_TRUTH").attachEvent("onItemClick", function(id){
+  Manager.CalibrateGround();
 });
 
 

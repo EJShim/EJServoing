@@ -2447,6 +2447,23 @@ E_Tracker.prototype.UpdateFeatureLable = function()
   }
 }
 
+E_Tracker.prototype.GetError = function()
+{
+  var imgMgr = this.Manager.ImageMgr();
+  this.UpdateFeatureLable();
+  var result = [];
+
+  
+  for(var i=0 ; i<4 ; i++){
+    imgMgr.DrawLine(this.initFeature[i], this.calFeature[i] );
+
+    var err = this.initFeature[i].clone().sub(this.calFeature[i]);
+    result.push(err);
+  }
+
+  return result;
+}
+
 module.exports = E_Tracker;
 
 },{}],5:[function(require,module,exports){
@@ -3014,20 +3031,25 @@ E_Interactor.prototype.HandleMouseMove = function()
   camera2.userData.helper.matrix.copy(mat);
 
 
+
+  //Trainning Data
+  if(this.Manager.m_bRunTrainning){
+    this.Manager.RunTraining();
+  }
+
   this.Manager.Redraw();
 }
 
 E_Interactor.prototype.HandleKeyEvent = function()
 {
-  var camera = this.Manager.renderer[0].camera;
+  if(this.m_keyCode === -1) return;
 
+
+  var camera = this.Manager.renderer[0].camera;
   var mat = camera.matrix.clone();
 
 
   switch (this.m_keyCode) {
-    case -1:
-      return;
-    break;
     case 67: // c
       mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, 1));
       camera.position.setFromMatrixPosition(mat);
@@ -3061,10 +3083,13 @@ E_Interactor.prototype.HandleKeyEvent = function()
       mat.multiply(new THREE.Matrix4().makeRotationZ(-0.01));
       camera.rotation.setFromRotationMatrix(mat);
     break;
-
-
     default:
     break;
+  }
+
+  //Trainning Data
+  if(this.Manager.m_bRunTrainning){
+    this.Manager.RunTraining();
   }
 
 
@@ -3095,19 +3120,17 @@ function E_MLManager(Mgr, network)
   this.Mgr = Mgr;
 
 
-  // var layer_defs = [];
-  // // input layer of size 1x1x2 (all volumes are 3D)
-  // layer_defs.push({type:'input', out_sx:30, out_sy:30, out_depth:30});
-  // // some fully connected layers
-  // layer_defs.push({type:'fc', num_neurons:20, activation:'relu'});
-  // layer_defs.push({type:'fc', num_neurons:20, activation:'relu'});
-  // // a softmax classifier predicting probabilities for two classes: 0,1
-  // layer_defs.push({type:'softmax', num_classes:12});
+  layer_defs = [];
+  layer_defs.push({type:'input', out_sx:1, out_sy:1, out_depth:8});
+  layer_defs.push({type:'fc', num_neurons:20, activation:'relu'});
+  layer_defs.push({type:'fc', num_neurons:20, activation:'sigmoid'});
+  layer_defs.push({type:'regression', num_neurons:16});
 
   this.network = new convnetjs.Net();
-  //this.network.makeLayers(layer_defs);
+  this.network.makeLayers(layer_defs);
   //this.SaveNetwork();
-  this.network.fromJSON( JSON.parse(network) );
+
+  // this.network.fromJSON( JSON.parse(network) );
 
   ///Initialize
   this.Initialize();
@@ -3120,76 +3143,22 @@ E_MLManager.prototype.Initialize = function()
 
 E_MLManager.prototype.PutVolume = function( volume )
 {
-
-  var className = ["Bathub", "Bed", "Bench", "Chair", "Cup", "Desk", "Dresser", "Monitor", "NightStand", "Sofa", "Table", "Toilet"];
-  var num_class = className.length;
-  var length = volume.data.length;
-  var convVol = new convnetjs.Vol(length, length, length, 0.0);
-
-  for(var i=0 ; i<length; i++){
-    for(var j=0 ; j<length; j++){
-      for(var k=0 ; k<length; k++){
-        if( volume.data[i][j][k] === 1 ){
-          convVol.set(i, j, k, volume.data[i][j][k]);
-        }
-      }
-    }
-  }
-
-  if(volume.class === null){
-    this.Mgr.SetLog("<b style='color:red'> Unknown Input </b><br>");
-  }else{
-    this.Mgr.SetLog("<b style='color:red'>Input :" + className[volume.class] + "</b><br>");
-  }
-
-  //Calculate Possibility
-  var probability = this.network.forward(convVol);
+  var inputVol = new convnetjs.Vol(volume.data);
 
 
-  //Get The Maximum
-  var max = 0;
-  var maxIdx = 0;
-
-  for(var i=0 ; i<num_class ; i++){
-    if(probability.w[i] > max){
-      max = probability.w[i];
-      maxIdx = i;
-    }
-  }
-
-  //Show Probability
-  for(var i=0 ; i<num_class ; i++){
-    var prob = probability.w[i] * 100
-    this.Mgr.AppendLog("<br>");
-
-    if(i === maxIdx){
-        if(i === volume.class){
-          this.Mgr.AppendLog("<b style='color:green'>" + className[i] + " : " + prob.toFixed(4) + " %</b>");
-        }else{
-          this.Mgr.AppendLog("<b>" + className[i] + " : " + prob.toFixed(4) + " %</b>");
-        }
-    }else{
-      if(i === volume.class){
-        this.Mgr.AppendLog("<div style='color:green'>" + className[i] + " : " + prob.toFixed(4) + " %</div>");
-      }else{
-        this.Mgr.AppendLog("<div>" + className[i] + " : " + prob.toFixed(4) + " %</div>");
-      }
-    }
-  }
-
-  //Max Class Name
-  this.Mgr.AppendLog("<br><br>");
-  this.Mgr.AppendLog("<b style='color:blue'> Predicted : " + className[maxIdx] + "</b>")
+  trainer = new convnetjs.SGDTrainer(this.network, {learning_rate:0.01, momentum:0.0, batch_size:1, l2_decay:0.001});
+  trainer.train(inputVol, volume.class);
 
 
+  //Save Netwrok
+  this.SaveNetwork();
+}
 
-  //Train Data
-  if(volume.class !== null){
-    var trainer = new convnetjs.Trainer(this.network, {learning_rate:0.01, l2_decay:0.001});
-    trainer.train(convVol, volume.class);
-
-    this.SaveNetwork();
-  }
+E_MLManager.prototype.Predict = function(input)
+{
+  var inputVol = new convnetjs.Vol(input);
+  var pred = this.network.forward(inputVol);
+  return pred.w;
 }
 
 E_MLManager.prototype.SaveNetwork = function()
@@ -3246,6 +3215,14 @@ function E_Manager()
 
   this.m_bRunTrainning = false;
   this.m_bCalibration = false;
+
+
+
+  //Ground-Truth of Calibration
+  //Get Global Annotation Matrix
+  var globalmax = "[0.99999998211860657, 0.0005886557628400624, 0.0000024272976588690653, 0, -2.329772001985475e-7, 0.004519194730209017, 0.9999898076057434, 0,-0.00058866071049124, 0.9999896287918091, 0.0045191943645477295, 0,-0.052400823682546616, 48.713191986083984, 0.02711086571216583, 1]"
+  this.groundMat = new THREE.Matrix4();
+  this.groundMat.elements = JSON.parse(globalmax)
 
 }
 
@@ -3399,30 +3376,46 @@ E_Manager.prototype.Animate = function()
     this.RunCalibration();
   }
 
-  if(this.m_bRunTrainning){
-    this.RunTraining();
-  }
-
-
   requestAnimationFrame( this.Animate.bind(this) );
 }
 
 E_Manager.prototype.RunTraining = function()
 {
   var camera = this.renderer[0].camera;
+  var log = "FeatureError : ";
 
-  var matrix = camera.matrixWorld.elements;
-  var log = "";
+  //Get 2D Feature Error
+  var featureError = this.Tracker().GetError();
+  var inputData = [];
 
-  for(var i in matrix){
-    if(i % 4 === 0){
-      log += "<br>"
-    }
-    log += matrix[i] + "<strong>//</strong>"
+  for(var i in featureError){
+    log +=  featureError[i].x + "," + featureError[i].y + "//";
+    inputData.push(featureError[i].x);
+    inputData.push(featureError[i].y);
+
   }
 
+  //Get Camera Matrix
+  var currentMat = camera.matrix.clone();
+  var invCur = new THREE.Matrix4().getInverse(currentMat, true);
+  //Annotation is a transformation matrix to the ground-truth matrix
+  var annotation = invCur.clone().multiply(this.groundMat);
+
+  log += "<br><br> Annotation(Transformation) : <br>"
+  for(var i in annotation.elements){
+    log += annotation.elements[i] + ",";
+    if(i % 4 === 3) log += "<br>";
+  }
+
+
+
+
+  var volume = {data:inputData, class:annotation.elements};
+
+  this.mlMgr.PutVolume(volume);
+
+
   this.SetLog(log);
-  this.AppendLog("<br><br>" + matrix);
 }
 
 E_Manager.prototype.RunCalibration = function()
@@ -3464,17 +3457,25 @@ E_Manager.prototype.NNCalibration = function()
 {
   var camera = this.renderer[0].camera;
 
-  //Get Global Annotation Matrix
-  var globalmax = "[0.99999998211860657, 0.0005886557628400624, 0.0000024272976588690653, 0, -2.329772001985475e-7, 0.004519194730209017, 0.9999898076057434, 0,-0.00058866071049124, 0.9999896287918091, 0.0045191943645477295, 0,-0.052400823682546616, 48.713191986083984, 0.02711086571216583, 1]"
-  var globalArr = JSON.parse(globalmax)
-  var globalMat = new THREE.Matrix4();
-  globalMat.elements = globalArr;
 
   var currentMat = camera.matrix.clone();
   var invCur = new THREE.Matrix4().getInverse(currentMat, true);
 
+
+  //Get Feature Error
+  var featureError = this.Tracker().GetError();
+  var inputData = [];
+  for(var i in featureError){
+    inputData.push(featureError[i].x);
+    inputData.push(featureError[i].y);
+
+  }
+
+
   // This Translation Matrix will be the Annotation of Deep Learning
-  var trans = invCur.clone().multiply(globalMat);
+  var predArr = this.mlMgr.Predict(inputData);
+  var trans = new THREE.Matrix4();
+  trans.elements = predArr;
 
   // Predicted Matrix will be Applied like this way
   currentMat.multiply(trans);
@@ -3484,8 +3485,27 @@ E_Manager.prototype.NNCalibration = function()
   camera.rotation.setFromRotationMatrix(currentMat);
 
   this.Redraw();
+}
 
-  // camera.matrixAutoUpdate = true;
+
+
+E_Manager.prototype.CalibrateGround = function()
+{
+  var camera = this.renderer[0].camera;
+  var currentMat = camera.matrix.clone();
+  var invCur = new THREE.Matrix4().getInverse(currentMat, true);
+
+  // This Translation Matrix will be the Annotation of Deep Learning
+  var trans = invCur.clone().multiply(this.groundMat);
+
+  // Predicted Matrix will be Applied like this way
+  currentMat.multiply(trans);
+
+  //Update Camear Transformation
+  camera.position.setFromMatrixPosition(currentMat);
+  camera.rotation.setFromRotationMatrix(currentMat);
+
+  this.Redraw();
 }
 
 E_Manager.prototype.SetLog = function(text)
@@ -3541,10 +3561,10 @@ E_SocketManager.prototype.HandleSignal = function()
   });
 
   socket.on("SIGNAL_RESTART", function(data){
-    //clear scene
-    if(Mgr.m_bRunTrainning){
-      Mgr.ClearScene();
-    }
+    // //clear scene
+    // if(Mgr.m_bRunTrainning){
+    //   Mgr.ClearScene();
+    // }
 
 
   })
@@ -3568,14 +3588,16 @@ var E_Manager = require('./E_Manager.js');
 //Toolbar
 var l_toolBar = {view:"toolbar",
                 elements:[
-                  //Toggle Run Random Learning
-                  { id:"ID_TOGGLE_TRAINNING",view:"toggle", type:"iconButton", name:"s4", width:150,
-                      offIcon:"play",  onIcon:"pause",
-                      offLabel:"Run Trainning", onLabel:"Stop Trainning"
+                  {
+                    id:"ID_BUTTON_GROUND_TRUTH", view:"button", value:"Ground Truth", width:150
                   },
                   { id:"ID_TOGGLE_CALIBRATION",view:"toggle", type:"iconButton", name:"s4", width:150,
                       offIcon:"play",  onIcon:"pause",
                       offLabel:"Run Calibration", onLabel:"Stop Calibration"
+                  },
+                  { id:"ID_TOGGLE_TRAINNING",view:"toggle", type:"iconButton", name:"s4", width:150,
+                      offIcon:"play",  onIcon:"pause",
+                      offLabel:"Run Trainning", onLabel:"Stop Trainning"
                   },
                   {
                     id:"ID_BUTTON_GLOBAL_ANSWER", view:"button", value:"Calibration (using NN)", width:150
@@ -3646,6 +3668,10 @@ $$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
 
 $$("ID_BUTTON_GLOBAL_ANSWER").attachEvent("onItemClick", function(id){
   Manager.NNCalibration();
+});
+
+$$("ID_BUTTON_GROUND_TRUTH").attachEvent("onItemClick", function(id){
+  Manager.CalibrateGround();
 });
 
 

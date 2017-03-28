@@ -141,4 +141,21 @@ E_Tracker.prototype.UpdateFeatureLable = function()
   }
 }
 
+E_Tracker.prototype.GetError = function()
+{
+  var imgMgr = this.Manager.ImageMgr();
+  this.UpdateFeatureLable();
+  var result = [];
+
+  
+  for(var i=0 ; i<4 ; i++){
+    imgMgr.DrawLine(this.initFeature[i], this.calFeature[i] );
+
+    var err = this.initFeature[i].clone().sub(this.calFeature[i]);
+    result.push(err);
+  }
+
+  return result;
+}
+
 module.exports = E_Tracker;

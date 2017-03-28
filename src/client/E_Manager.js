@@ -43,6 +43,14 @@ function E_Manager()
   this.m_bRunTrainning = false;
   this.m_bCalibration = false;
 
+
+
+  //Ground-Truth of Calibration
+  //Get Global Annotation Matrix
+  var globalmax = "[0.99999998211860657, 0.0005886557628400624, 0.0000024272976588690653, 0, -2.329772001985475e-7, 0.004519194730209017, 0.9999898076057434, 0,-0.00058866071049124, 0.9999896287918091, 0.0045191943645477295, 0,-0.052400823682546616, 48.713191986083984, 0.02711086571216583, 1]"
+  this.groundMat = new THREE.Matrix4();
+  this.groundMat.elements = JSON.parse(globalmax)
+
 }
 
 E_Manager.prototype.Initialize = function()
@@ -195,30 +203,46 @@ E_Manager.prototype.Animate = function()
     this.RunCalibration();
   }
 
-  if(this.m_bRunTrainning){
-    this.RunTraining();
-  }
-
-
   requestAnimationFrame( this.Animate.bind(this) );
 }
 
 E_Manager.prototype.RunTraining = function()
 {
   var camera = this.renderer[0].camera;
+  var log = "FeatureError : ";
 
-  var matrix = camera.matrixWorld.elements;
-  var log = "";
+  //Get 2D Feature Error
+  var featureError = this.Tracker().GetError();
+  var inputData = [];
 
-  for(var i in matrix){
-    if(i % 4 === 0){
-      log += "<br>"
-    }
-    log += matrix[i] + "<strong>//</strong>"
+  for(var i in featureError){
+    log +=  featureError[i].x + "," + featureError[i].y + "//";
+    inputData.push(featureError[i].x);
+    inputData.push(featureError[i].y);
+
   }
 
+  //Get Camera Matrix
+  var currentMat = camera.matrix.clone();
+  var invCur = new THREE.Matrix4().getInverse(currentMat, true);
+  //Annotation is a transformation matrix to the ground-truth matrix
+  var annotation = invCur.clone().multiply(this.groundMat);
+
+  log += "<br><br> Annotation(Transformation) : <br>"
+  for(var i in annotation.elements){
+    log += annotation.elements[i] + ",";
+    if(i % 4 === 3) log += "<br>";
+  }
+
+
+
+
+  var volume = {data:inputData, class:annotation.elements};
+
+  this.mlMgr.PutVolume(volume);
+
+
   this.SetLog(log);
-  this.AppendLog("<br><br>" + matrix);
 }
 
 E_Manager.prototype.RunCalibration = function()
@@ -260,17 +284,25 @@ E_Manager.prototype.NNCalibration = function()
 {
   var camera = this.renderer[0].camera;
 
-  //Get Global Annotation Matrix
-  var globalmax = "[0.99999998211860657, 0.0005886557628400624, 0.0000024272976588690653, 0, -2.329772001985475e-7, 0.004519194730209017, 0.9999898076057434, 0,-0.00058866071049124, 0.9999896287918091, 0.0045191943645477295, 0,-0.052400823682546616, 48.713191986083984, 0.02711086571216583, 1]"
-  var globalArr = JSON.parse(globalmax)
-  var globalMat = new THREE.Matrix4();
-  globalMat.elements = globalArr;
 
   var currentMat = camera.matrix.clone();
   var invCur = new THREE.Matrix4().getInverse(currentMat, true);
 
+
+  //Get Feature Error
+  var featureError = this.Tracker().GetError();
+  var inputData = [];
+  for(var i in featureError){
+    inputData.push(featureError[i].x);
+    inputData.push(featureError[i].y);
+
+  }
+
+
   // This Translation Matrix will be the Annotation of Deep Learning
-  var trans = invCur.clone().multiply(globalMat);
+  var predArr = this.mlMgr.Predict(inputData);
+  var trans = new THREE.Matrix4();
+  trans.elements = predArr;
 
   // Predicted Matrix will be Applied like this way
   currentMat.multiply(trans);
@@ -280,8 +312,27 @@ E_Manager.prototype.NNCalibration = function()
   camera.rotation.setFromRotationMatrix(currentMat);
 
   this.Redraw();
+}
 
-  // camera.matrixAutoUpdate = true;
+
+
+E_Manager.prototype.CalibrateGround = function()
+{
+  var camera = this.renderer[0].camera;
+  var currentMat = camera.matrix.clone();
+  var invCur = new THREE.Matrix4().getInverse(currentMat, true);
+
+  // This Translation Matrix will be the Annotation of Deep Learning
+  var trans = invCur.clone().multiply(this.groundMat);
+
+  // Predicted Matrix will be Applied like this way
+  currentMat.multiply(trans);
+
+  //Update Camear Transformation
+  camera.position.setFromMatrixPosition(currentMat);
+  camera.rotation.setFromRotationMatrix(currentMat);
+
+  this.Redraw();
 }
 
 E_Manager.prototype.SetLog = function(text)

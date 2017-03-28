@@ -23,10 +23,10 @@ E_SocketManager.prototype.HandleSignal = function()
   });
 
   socket.on("SIGNAL_RESTART", function(data){
-    //clear scene
-    if(Mgr.m_bRunTrainning){
-      Mgr.ClearScene();
-    }
+    // //clear scene
+    // if(Mgr.m_bRunTrainning){
+    //   Mgr.ClearScene();
+    // }
 
 
   })
