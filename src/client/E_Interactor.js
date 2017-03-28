@@ -103,10 +103,10 @@ E_Interactor.prototype.HandleMouseMove = function()
 
 
 
-  //Trainning Data
-  if(this.Manager.m_bRunTrainning){
-    this.Manager.RunTraining();
-  }
+  // //Trainning Data
+  // if(this.Manager.m_bRunTrainning){
+  //   this.Manager.RunTraining();
+  // }
 
   this.Manager.Redraw();
 }

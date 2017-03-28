@@ -29,7 +29,13 @@ ES_SocketManager.prototype.HandleSignal = function()
     //Read Network and Emit to the socket
     var file = './data/network_obj.json'
     jsonfile.readFile(file, function(err, obj) {
-      socket.emit("INITIALIZE_NETOWORK", obj);
+
+      var trans = './data/transform.json';
+      jsonfile.readFile(trans, function(err, obj2){
+          var data = {network:obj, action:obj2}
+          socket.emit("INITIALIZE_NETOWORK", data);
+
+      })
     });
 
 
@@ -38,6 +44,10 @@ ES_SocketManager.prototype.HandleSignal = function()
       Mgr.SaveJson("./data/network_obj.json", data);
 
       socket.emit("SIGNAL_RESTART");
+    })
+
+    socket.on("SAVE_ACTIONS", function(data){
+      Mgr.SaveJson("./data/transform.json", data);
     })
 
   });

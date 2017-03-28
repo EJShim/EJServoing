@@ -20,6 +20,7 @@ E_SocketManager.prototype.HandleSignal = function()
 
   socket.on("INITIALIZE_NETOWORK", function(data){
     Mgr.OnInitialize(data)
+
   });
 
   socket.on("SIGNAL_RESTART", function(data){

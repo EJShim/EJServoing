@@ -113,9 +113,11 @@ E_Manager.prototype.Initialize = function()
   this.InitObject();
 }
 
-E_Manager.prototype.OnInitialize = function(network)
+E_Manager.prototype.OnInitialize = function(data)
 {
-  this.mlMgr = new E_MLManager(this, network);
+  this.actions = data.action;
+
+  this.mlMgr = new E_MLManager(this, data.network);
 
   this.Initialize();
 }
@@ -203,24 +205,35 @@ E_Manager.prototype.Animate = function()
     this.RunCalibration();
   }
 
+  if(this.m_bRunTrainning){
+    this.RunTraining();
+  }
+
   requestAnimationFrame( this.Animate.bind(this) );
 }
 
 E_Manager.prototype.RunTraining = function()
 {
   var camera = this.renderer[0].camera;
+  var currMat = camera.matrix.clone();
   var log = "FeatureError : ";
 
   //Get 2D Feature Error
   var featureError = this.Tracker().GetError();
-  var inputData = [];
+  var prevScore = 0.0;
 
+  var inputData = [];
   for(var i in featureError){
     log +=  featureError[i].x + "," + featureError[i].y + "//";
     inputData.push(featureError[i].x);
     inputData.push(featureError[i].y);
 
+    prevScore += featureError[i].length()
   }
+
+  prevScore /= featureError.length;
+
+  // console.log(curScore);
 
   //Get Camera Matrix
   var currentMat = camera.matrix.clone();
@@ -228,20 +241,54 @@ E_Manager.prototype.RunTraining = function()
   //Annotation is a transformation matrix to the ground-truth matrix
   var annotation = invCur.clone().multiply(this.groundMat);
 
-  log += "<br><br> Annotation(Transformation) : <br>"
-  for(var i in annotation.elements){
-    log += annotation.elements[i] + ",";
-    if(i % 4 === 3) log += "<br>";
-  }
+  // log += "<br><br> Annotation(Transformation) : <br>"
+  // for(var i in annotation.elements){
+  //   log += annotation.elements[i] + ",";
+  //   if(i % 4 === 3) log += "<br>";
+  // }
 
 
 
 
   var volume = {data:inputData, class:annotation.elements};
 
-  this.mlMgr.PutVolume(volume);
+  var idx = this.mlMgr.ForwardBrain(volume);
+
+  //Get Action Transformation
+  var action = this.actions[idx];
+  actionArr = [];
+  $.each(action, function(i, n){
+    actionArr.push(n);
+  });
+  var actionMat = new THREE.Matrix4();
+  actionMat.elements = actionArr;
+
+  //Transform
+  currMat.multiply(actionMat);
+
+  camera.position.setFromMatrixPosition(currMat);
+  camera.rotation.setFromRotationMatrix(currMat);
+
+  this.Redraw();
 
 
+
+
+  //Get Reward After actionMat
+  //Get 2D Feature Error
+  var featureError = this.Tracker().GetError();
+  var curScore = 0.0;
+  for(var i in featureError){
+    curScore += featureError[i].length()
+  }
+
+  curScore /= featureError.length;
+
+  var reward = curScore - prevScore;
+
+  this.mlMgr.BackwardBrain(reward);
+
+  log += "<br><br>Reward : " + reward;
   this.SetLog(log);
 }
 
