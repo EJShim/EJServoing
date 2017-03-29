@@ -42,6 +42,9 @@ function E_Manager()
 
   this.m_bRunTrainning = false;
   this.m_bCalibration = false;
+  this.m_bNNCalibration = false;
+
+  this.prevTransform = new THREE.Matrix4();
 
 
 
@@ -209,6 +212,10 @@ E_Manager.prototype.Animate = function()
     this.RunTraining();
   }
 
+  if(this.m_bNNCalibration){
+    this.NNCalibration();
+  }
+
   requestAnimationFrame( this.Animate.bind(this) );
 }
 
@@ -249,6 +256,23 @@ E_Manager.prototype.RunTraining = function()
 
 
 
+  var features = this.Tracker().calFeature;
+  if(features[0].x < -270 || features[1].x < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[2].x > 270 || features[3].x > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[0].y < -270 || features[2].y < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[1].y > 270 || features[3].y > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
 
   var volume = {data:inputData, class:annotation.elements};
 
@@ -263,9 +287,12 @@ E_Manager.prototype.RunTraining = function()
   var actionMat = new THREE.Matrix4();
   actionMat.elements = actionArr;
 
+
   //Transform
   currMat.multiply(actionMat);
 
+
+  this.prevTransform = camera.matrix.clone();
   camera.position.setFromMatrixPosition(currMat);
   camera.rotation.setFromRotationMatrix(currMat);
 
@@ -284,12 +311,15 @@ E_Manager.prototype.RunTraining = function()
 
   curScore /= featureError.length;
 
-  var reward = curScore - prevScore;
+  var reward = Math.tanh(curScore - prevScore);
+
+  if(reward >= 0) reward = -1;
+  else reward = 1;
 
   this.mlMgr.BackwardBrain(reward);
 
   log += "<br><br>Reward : " + reward;
-  this.SetLog(log);
+  // this.SetLog(log);
 }
 
 E_Manager.prototype.RunCalibration = function()
@@ -315,6 +345,14 @@ E_Manager.prototype.RunCalibration = function()
   this.Redraw();
 }
 
+E_Manager.prototype.ReturnCamera = function(camera)
+{
+
+  camera.position.setFromMatrixPosition(this.prevTransform);
+  camera.rotation.setFromRotationMatrix(this.prevTransform);
+  this.Redraw();
+}
+
 
 E_Manager.prototype.Frand = function(min, max)
 {
@@ -327,34 +365,71 @@ E_Manager.prototype.Frand = function(min, max)
   return value;
 }
 
+E_Manager.prototype.OnNNCalibration = function(value)
+{
+  this.m_bNNCalibration = value;
+}
+
 E_Manager.prototype.NNCalibration = function()
 {
   var camera = this.renderer[0].camera;
 
-
+  //Get Camera Matrix
   var currentMat = camera.matrix.clone();
   var invCur = new THREE.Matrix4().getInverse(currentMat, true);
+  //Annotation is a transformation matrix to the ground-truth matrix
+  var annotation = invCur.clone().multiply(this.groundMat);
 
-
-  //Get Feature Error
+  //Get 2D Feature Error
   var featureError = this.Tracker().GetError();
+
   var inputData = [];
   for(var i in featureError){
     inputData.push(featureError[i].x);
     inputData.push(featureError[i].y);
-
   }
 
 
-  // This Translation Matrix will be the Annotation of Deep Learning
-  var predArr = this.mlMgr.Predict(inputData);
-  var trans = new THREE.Matrix4();
-  trans.elements = predArr;
 
-  // Predicted Matrix will be Applied like this way
-  currentMat.multiply(trans);
+  var features = this.Tracker().calFeature;
+  if(features[0].x < -270 || features[1].x < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[2].x > 270 || features[3].x > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[0].y < -270 || features[2].y < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[1].y > 270 || features[3].y > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+
+  var volume = {data:inputData, class:annotation.elements};
+
+
+
+  var idx = this.mlMgr.ForwardBrain(volume);
+  //No Reward
+
+  //Get Action Transformation
+  var action = this.actions[idx];
+  actionArr = [];
+  $.each(action, function(i, n){
+    actionArr.push(n);
+  });
+  var actionMat = new THREE.Matrix4();
+  actionMat.elements = actionArr;
+
+  //Transform
+  currentMat.multiply(actionMat);
 
   //Update Camear Transformation
+  this.prevTransform = camera.matrix.clone();
   camera.position.setFromMatrixPosition(currentMat);
   camera.rotation.setFromRotationMatrix(currentMat);
 
@@ -400,7 +475,6 @@ E_Manager.prototype.OnRunTrainning = function(value)
     this.m_bRunTrainning = false;
   }
 }
-
 
 E_Manager.prototype.OnRunCalibration = function(value)
 {

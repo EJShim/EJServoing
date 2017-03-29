@@ -2200,13 +2200,10 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
 
 },{}],2:[function(require,module,exports){
 var deepqlearn = deepqlearn || { REVISION: 'ALPHA' };
+var convnetjs = require("./convnet.js");
+var cnnutil = require("./util.js");
 
 (function(global) {
-
-  var convnetjs = require('./convnet.js');
-  var cnnutil = require('./util.js');
-
-
   "use strict";
 
   // An agent is in state0 and does action0
@@ -2455,12 +2452,13 @@ var deepqlearn = deepqlearn || { REVISION: 'ALPHA' };
           var x = new convnetjs.Vol(1, 1, this.net_inputs);
           x.w = e.state0;
           var maxact = this.policy(e.state1);
-          var r = e.reward0 + this.gamma * maxact.value;
+          var r = e.reward0 + this.gamma * maxact.value
           var ystruct = {dim: e.action0, val: r};
           var loss = this.tdtrainer.train(x, ystruct);
           avcost += loss.loss;
         }
         avcost = avcost/this.tdtrainer.batch_size;
+        // console.log(avcost);
         this.average_loss_window.add(avcost);
       }
     },
@@ -2482,6 +2480,16 @@ var deepqlearn = deepqlearn || { REVISION: 'ALPHA' };
       brainvis.appendChild(desc);
 
       elt.appendChild(brainvis);
+    },
+    getLog: function(){
+      var t = '';
+      t += 'experience replay size: ' + this.experience.length + '<br>';
+      t += 'exploration epsilon: ' + this.epsilon + '<br>';
+      t += 'age: ' + this.age + '<br>';
+      t += 'average Q-learning loss: ' + this.average_loss_window.get_average() + '<br />';
+      t += 'smooth-ish reward: ' + this.average_reward_window.get_average() + '<br />';
+
+      return t;
     }
   }
 
@@ -3489,15 +3497,15 @@ function E_MLManager(Mgr, network)
   this.brain = null;
 
   ///Initialize
-  this.Initialize();
+  this.Initialize(network);
 }
 
-E_MLManager.prototype.Initialize = function()
+E_MLManager.prototype.Initialize = function(network)
 {
   //4 error 2-diimensional vector
   var num_inputs = 8;
   //Random Position and Rotation
-  var num_actions = 100;
+  var num_actions = 6;
   var temporal_window = 1;
   var network_size = num_inputs * temporal_window + num_actions * temporal_window + num_inputs;
   // this.MakeActions(num_actions);
@@ -3511,11 +3519,11 @@ E_MLManager.prototype.Initialize = function()
 
   // options for the Temporal Difference learner that trains the above net
   // by backpropping the temporal difference learning rule.
-  tdtrainer_options = {learning_rate:0.001, momentum:0.0, batch_size:64, l2_decay:0.01};
+  tdtrainer_options = {learning_rate:0.0001, momentum:0.0, batch_size:64, l2_decay:0.01};
   var opt = {};
   opt.temporal_window = temporal_window;
   opt.experience_size = 30000;
-  opt.start_learn_threshold = 1000;
+  opt.start_learn_threshold = 100;
   opt.gamma = 0.7;
   opt.learning_steps_total = 200000;
   opt.learning_steps_burnin = 3000;
@@ -3528,6 +3536,10 @@ E_MLManager.prototype.Initialize = function()
 
   //DeepQLearn Brain
   this.brain = new deepqlearn.Brain(num_inputs, num_actions, opt)
+
+  //Load Saved Network
+  this.brain.value_net.fromJSON( JSON.parse(network) );
+  this.Mgr.SetLog(network);
 
 
   //Initialize Network
@@ -3545,7 +3557,9 @@ E_MLManager.prototype.BackwardBrain = function(reward)
 {
   this.brain.backward(reward);
 
-  // console.log(this.brain.toJSON());
+
+  this.Mgr.SetLog(this.brain.getLog());
+  this.SaveBrain();
 }
 
 E_MLManager.prototype.PutVolume = function( volume )
@@ -3575,9 +3589,20 @@ E_MLManager.prototype.SaveNetwork = function()
   this.Mgr.SocketMgr().EmitData("SAVE_NETWORK", jsonNetwork);
 }
 
+E_MLManager.prototype.SaveBrain = function()
+{
+  //Save Brain
+  var jsonBrain = JSON.stringify( this.brain.value_net.toJSON() );
+  this.Mgr.SocketMgr().EmitData("SAVE_BRAIN", jsonBrain);
+}
+
 
 E_MLManager.prototype.MakeActions = function(numActions)
 {
+  if(numActions === 6){
+    this.MakeSixActions();
+    return;
+  }
   var results = [];
   var trV = 1.0;
   var rotV = 0.01;
@@ -3593,6 +3618,50 @@ E_MLManager.prototype.MakeActions = function(numActions)
     results.push(mat.elements);
   }
 
+  this.Mgr.SocketMgr().EmitData("SAVE_ACTIONS", results );
+}
+
+E_MLManager.prototype.MakeSixActions = function()
+{
+  var results = [];
+  var trV = 0.2;
+
+
+
+  //forward
+  var mat = new THREE.Matrix4();
+  mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, trV * -1.0));
+  results.push(mat.elements)
+
+
+  //backward
+  mat = new THREE.Matrix4();
+  mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, trV));
+  results.push(mat.elements)
+
+  //right
+  mat = new THREE.Matrix4();
+  mat.multiply(new THREE.Matrix4().makeTranslation(trV, 0, 0));
+  results.push(mat.elements)
+
+  //left
+  mat = new THREE.Matrix4();
+  mat.multiply(new THREE.Matrix4().makeTranslation(trV * -1.0, 0, 0));
+  results.push(mat.elements)
+
+  //top
+  mat = new THREE.Matrix4();
+  mat.multiply(new THREE.Matrix4().makeTranslation(0, trV, 0));
+  results.push(mat.elements)
+
+  //bottom
+  mat = new THREE.Matrix4();
+  mat.multiply(new THREE.Matrix4().makeTranslation(0, trV * -1.0, 0));
+  results.push(mat.elements)
+
+
+
+  // console.log(results);
   this.Mgr.SocketMgr().EmitData("SAVE_ACTIONS", results );
 }
 
@@ -3643,6 +3712,9 @@ function E_Manager()
 
   this.m_bRunTrainning = false;
   this.m_bCalibration = false;
+  this.m_bNNCalibration = false;
+
+  this.prevTransform = new THREE.Matrix4();
 
 
 
@@ -3810,6 +3882,10 @@ E_Manager.prototype.Animate = function()
     this.RunTraining();
   }
 
+  if(this.m_bNNCalibration){
+    this.NNCalibration();
+  }
+
   requestAnimationFrame( this.Animate.bind(this) );
 }
 
@@ -3850,6 +3926,23 @@ E_Manager.prototype.RunTraining = function()
 
 
 
+  var features = this.Tracker().calFeature;
+  if(features[0].x < -270 || features[1].x < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[2].x > 270 || features[3].x > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[0].y < -270 || features[2].y < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[1].y > 270 || features[3].y > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
 
   var volume = {data:inputData, class:annotation.elements};
 
@@ -3864,9 +3957,12 @@ E_Manager.prototype.RunTraining = function()
   var actionMat = new THREE.Matrix4();
   actionMat.elements = actionArr;
 
+
   //Transform
   currMat.multiply(actionMat);
 
+
+  this.prevTransform = camera.matrix.clone();
   camera.position.setFromMatrixPosition(currMat);
   camera.rotation.setFromRotationMatrix(currMat);
 
@@ -3885,12 +3981,15 @@ E_Manager.prototype.RunTraining = function()
 
   curScore /= featureError.length;
 
-  var reward = curScore - prevScore;
+  var reward = Math.tanh(curScore - prevScore);
+
+  if(reward >= 0) reward = -1;
+  else reward = 1;
 
   this.mlMgr.BackwardBrain(reward);
 
   log += "<br><br>Reward : " + reward;
-  this.SetLog(log);
+  // this.SetLog(log);
 }
 
 E_Manager.prototype.RunCalibration = function()
@@ -3916,6 +4015,14 @@ E_Manager.prototype.RunCalibration = function()
   this.Redraw();
 }
 
+E_Manager.prototype.ReturnCamera = function(camera)
+{
+
+  camera.position.setFromMatrixPosition(this.prevTransform);
+  camera.rotation.setFromRotationMatrix(this.prevTransform);
+  this.Redraw();
+}
+
 
 E_Manager.prototype.Frand = function(min, max)
 {
@@ -3928,34 +4035,71 @@ E_Manager.prototype.Frand = function(min, max)
   return value;
 }
 
+E_Manager.prototype.OnNNCalibration = function(value)
+{
+  this.m_bNNCalibration = value;
+}
+
 E_Manager.prototype.NNCalibration = function()
 {
   var camera = this.renderer[0].camera;
 
-
+  //Get Camera Matrix
   var currentMat = camera.matrix.clone();
   var invCur = new THREE.Matrix4().getInverse(currentMat, true);
+  //Annotation is a transformation matrix to the ground-truth matrix
+  var annotation = invCur.clone().multiply(this.groundMat);
 
-
-  //Get Feature Error
+  //Get 2D Feature Error
   var featureError = this.Tracker().GetError();
+
   var inputData = [];
   for(var i in featureError){
     inputData.push(featureError[i].x);
     inputData.push(featureError[i].y);
-
   }
 
 
-  // This Translation Matrix will be the Annotation of Deep Learning
-  var predArr = this.mlMgr.Predict(inputData);
-  var trans = new THREE.Matrix4();
-  trans.elements = predArr;
 
-  // Predicted Matrix will be Applied like this way
-  currentMat.multiply(trans);
+  var features = this.Tracker().calFeature;
+  if(features[0].x < -270 || features[1].x < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[2].x > 270 || features[3].x > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[0].y < -270 || features[2].y < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[1].y > 270 || features[3].y > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+
+  var volume = {data:inputData, class:annotation.elements};
+
+
+
+  var idx = this.mlMgr.ForwardBrain(volume);
+  //No Reward
+
+  //Get Action Transformation
+  var action = this.actions[idx];
+  actionArr = [];
+  $.each(action, function(i, n){
+    actionArr.push(n);
+  });
+  var actionMat = new THREE.Matrix4();
+  actionMat.elements = actionArr;
+
+  //Transform
+  currentMat.multiply(actionMat);
 
   //Update Camear Transformation
+  this.prevTransform = camera.matrix.clone();
   camera.position.setFromMatrixPosition(currentMat);
   camera.rotation.setFromRotationMatrix(currentMat);
 
@@ -4001,7 +4145,6 @@ E_Manager.prototype.OnRunTrainning = function(value)
     this.m_bRunTrainning = false;
   }
 }
-
 
 E_Manager.prototype.OnRunCalibration = function(value)
 {
@@ -4076,7 +4219,7 @@ var l_toolBar = {view:"toolbar",
                       offLabel:"Run Trainning", onLabel:"Stop Trainning"
                   },
                   {
-                    id:"ID_BUTTON_GLOBAL_ANSWER", view:"button", value:"Calibration (using NN)", width:150
+                    id:"ID_TOGGLE_NNCALIB", view:"toggle", type:"iconButton", name:"s4", offIcon:"play", onIcon:"pause", offLabel:"Calibration (using NN)", onLabel:"Stop Calib", width:250
                   }
                 ]};
 
@@ -4142,8 +4285,8 @@ $$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
   Manager.OnRunCalibration(this.getValue());
 });
 
-$$("ID_BUTTON_GLOBAL_ANSWER").attachEvent("onItemClick", function(id){
-  Manager.NNCalibration();
+$$("ID_TOGGLE_NNCALIB").attachEvent("onItemClick", function(id){
+  Manager.OnNNCalibration(this.getValue());
 });
 
 $$("ID_BUTTON_GROUND_TRUTH").attachEvent("onItemClick", function(id){

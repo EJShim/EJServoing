@@ -19,7 +19,7 @@ var l_toolBar = {view:"toolbar",
                       offLabel:"Run Trainning", onLabel:"Stop Trainning"
                   },
                   {
-                    id:"ID_BUTTON_GLOBAL_ANSWER", view:"button", value:"Calibration (using NN)", width:150
+                    id:"ID_TOGGLE_NNCALIB", view:"toggle", type:"iconButton", name:"s4", offIcon:"play", onIcon:"pause", offLabel:"Calibration (using NN)", onLabel:"Stop Calib", width:250
                   }
                 ]};
 
@@ -85,8 +85,8 @@ $$("ID_TOGGLE_CALIBRATION").attachEvent("onItemClick", function(id){
   Manager.OnRunCalibration(this.getValue());
 });
 
-$$("ID_BUTTON_GLOBAL_ANSWER").attachEvent("onItemClick", function(id){
-  Manager.NNCalibration();
+$$("ID_TOGGLE_NNCALIB").attachEvent("onItemClick", function(id){
+  Manager.OnNNCalibration(this.getValue());
 });
 
 $$("ID_BUTTON_GROUND_TRUTH").attachEvent("onItemClick", function(id){
