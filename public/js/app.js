@@ -2200,10 +2200,13 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
 
 },{}],2:[function(require,module,exports){
 var deepqlearn = deepqlearn || { REVISION: 'ALPHA' };
-var convnetjs = require("./convnet.js");
-var cnnutil = require("./util.js");
 
 (function(global) {
+
+  var convnetjs = require('./convnet.js');
+  var cnnutil = require('./util.js');
+
+
   "use strict";
 
   // An agent is in state0 and does action0
@@ -2452,13 +2455,12 @@ var cnnutil = require("./util.js");
           var x = new convnetjs.Vol(1, 1, this.net_inputs);
           x.w = e.state0;
           var maxact = this.policy(e.state1);
-          var r = e.reward0 + this.gamma * maxact.value
+          var r = e.reward0 + this.gamma * maxact.value;
           var ystruct = {dim: e.action0, val: r};
           var loss = this.tdtrainer.train(x, ystruct);
           avcost += loss.loss;
         }
         avcost = avcost/this.tdtrainer.batch_size;
-        // console.log(avcost);
         this.average_loss_window.add(avcost);
       }
     },
@@ -2481,14 +2483,13 @@ var cnnutil = require("./util.js");
 
       elt.appendChild(brainvis);
     },
-    getLog: function(){
+    getLog: function() {
       var t = '';
       t += 'experience replay size: ' + this.experience.length + '<br>';
       t += 'exploration epsilon: ' + this.epsilon + '<br>';
       t += 'age: ' + this.age + '<br>';
       t += 'average Q-learning loss: ' + this.average_loss_window.get_average() + '<br />';
       t += 'smooth-ish reward: ' + this.average_reward_window.get_average() + '<br />';
-
       return t;
     }
   }
@@ -3744,7 +3745,7 @@ E_Manager.prototype.Initialize = function()
   for(var i=0 ; i<2 ; i++){
     this.renderer[i] = new THREE.WebGLRenderer({preserveDrawingBuffer:true, alpha:true});
     this.renderer[i].scene = new THREE.Scene();
-    this.renderer[i].camera = new THREE.PerspectiveCamera( 45, renWin[i].$width/renWin[i].$height, 0.1, 10000000000 );
+    this.renderer[i].camera = new THREE.PerspectiveCamera( 45, renWin[i].$width/renWin[i].$height, 0.1, 1000 );
 
     //Set Init Camera Position
     this.renderer[i].camera.position.z = -20;
@@ -3760,6 +3761,8 @@ E_Manager.prototype.Initialize = function()
     //Set Interactor
     this.renderer[i].interactor = new E_Interactor(this, this.renderer[i]);
   }
+
+  this.renderer[0].camera.far = 100;
 
   this.renderer[0].pointLight = new THREE.PointLight(0xffffff);
   this.renderer[0].scene.add(this.renderer[0].pointLight);
@@ -3989,7 +3992,32 @@ E_Manager.prototype.RunTraining = function()
   this.mlMgr.BackwardBrain(reward);
 
   log += "<br><br>Reward : " + reward;
-  // this.SetLog(log);
+
+  if(curScore <= 5.0){
+    this.GoToInit();
+    this.Redraw();
+  }
+}
+
+E_Manager.prototype.RanBool = function()
+{
+  d = Math.random();
+
+  if(d < 0.5) return -1;
+  else return 1;
+}
+
+E_Manager.prototype.GoToInit = function()
+{
+  // this.m_bRunTrainning = false;
+  var camera = this.renderer[0].camera;
+
+  var y = Math.random() * camera.far;
+  var x = Math.tan(camera.fov / 5.0) * (camera.far - y) * this.Frand(-1, 1);
+  var z = Math.tan(camera.fov / 5.0) * (camera.far - y) * this.Frand(-1, 1);
+
+  camera.position.set(x, y, z);
+
 }
 
 E_Manager.prototype.RunCalibration = function()
@@ -4080,9 +4108,6 @@ E_Manager.prototype.NNCalibration = function()
   }
 
   var volume = {data:inputData, class:annotation.elements};
-
-
-
   var idx = this.mlMgr.ForwardBrain(volume);
   //No Reward
 
@@ -4111,6 +4136,8 @@ E_Manager.prototype.NNCalibration = function()
 E_Manager.prototype.CalibrateGround = function()
 {
   var camera = this.renderer[0].camera;
+
+  console.log(camera.position)
   var currentMat = camera.matrix.clone();
   var invCur = new THREE.Matrix4().getInverse(currentMat, true);
 
@@ -4126,6 +4153,9 @@ E_Manager.prototype.CalibrateGround = function()
 
   this.Redraw();
 }
+
+
+
 
 E_Manager.prototype.SetLog = function(text)
 {
