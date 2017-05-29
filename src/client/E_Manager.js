@@ -54,6 +54,15 @@ function E_Manager()
   this.groundMat = new THREE.Matrix4();
   this.groundMat.elements = JSON.parse(globalmax)
 
+
+
+  ///recording values
+  this.episode = 0;
+  this.startTime = null;
+
+  this.iterations = 0;
+  this.iter_error_table = [['iterations', 'error']];
+
 }
 
 E_Manager.prototype.Initialize = function()
@@ -223,6 +232,9 @@ E_Manager.prototype.Animate = function()
 
 E_Manager.prototype.RunTraining = function()
 {
+  if(this.mlMgr.brain.epsilon <= this.mlMgr.brain.epsilon_min) return;
+
+
   var camera = this.renderer[0].camera;
   var currMat = camera.matrix.clone();
   var log = "FeatureError : ";
@@ -249,14 +261,6 @@ E_Manager.prototype.RunTraining = function()
   var invCur = new THREE.Matrix4().getInverse(currentMat, true);
   //Annotation is a transformation matrix to the ground-truth matrix
   var annotation = invCur.clone().multiply(this.groundMat);
-
-  // log += "<br><br> Annotation(Transformation) : <br>"
-  // for(var i in annotation.elements){
-  //   log += annotation.elements[i] + ",";
-  //   if(i % 4 === 3) log += "<br>";
-  // }
-
-
 
   var features = this.Tracker().calFeature;
   if(features[0].x < -270 || features[1].x < -270) {
@@ -300,18 +304,24 @@ E_Manager.prototype.RunTraining = function()
 
   this.Redraw();
 
-
-
-
   //Get Reward After actionMat
   //Get 2D Feature Error
   var featureError = this.Tracker().GetError();
+
+
   var curScore = 0.0;
   for(var i in featureError){
     curScore += featureError[i].length()
   }
-
   curScore /= featureError.length;
+
+
+  //Iter of this episode
+  this.iterations++;
+  if(this.iterations % 10 === 0){
+    this.iter_error_table.push([this.iterations, curScore]);
+  }
+
 
   var reward = Math.tanh(curScore - prevScore);
 
@@ -327,6 +337,95 @@ E_Manager.prototype.RunTraining = function()
     this.Redraw();
   }
 }
+
+E_Manager.prototype.NNCalibration = function()
+{
+  if(this.mlMgr.brain.age < 1000){
+    this.RunTraining();
+    return;
+  }
+  var camera = this.renderer[0].camera;
+
+  //Get Camera Matrix
+  var currentMat = camera.matrix.clone();
+  var invCur = new THREE.Matrix4().getInverse(currentMat, true);
+  //Annotation is a transformation matrix to the ground-truth matrix
+  var annotation = invCur.clone().multiply(this.groundMat);
+
+  //Get 2D Feature Error
+  var featureError = this.Tracker().GetError();
+
+  var inputData = [];
+  for(var i in featureError){
+    inputData.push(featureError[i].x);
+    inputData.push(featureError[i].y);
+  }
+
+  var features = this.Tracker().calFeature;
+  if(features[0].x < -270 || features[1].x < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[2].x > 270 || features[3].x > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[0].y < -270 || features[2].y < -270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+  if(features[1].y > 270 || features[3].y > 270) {
+    this.ReturnCamera(camera)
+    return;
+  }
+
+  var volume = {data:inputData, class:annotation.elements};
+  var idx = this.mlMgr.ForwardBrain(volume);
+  //No Reward
+
+  //Get Action Transformation
+  var action = this.actions[idx];
+  actionArr = [];
+  $.each(action, function(i, n){
+    actionArr.push(n);
+  });
+  var actionMat = new THREE.Matrix4();
+  actionMat.elements = actionArr;
+
+  //Transform
+  currentMat.multiply(actionMat);
+
+  //Update Camear Transformation
+  this.prevTransform = camera.matrix.clone();
+  camera.position.setFromMatrixPosition(currentMat);
+  camera.rotation.setFromRotationMatrix(currentMat);
+
+  this.Redraw();
+
+
+  //Calculate Current Score
+  //Get 2D Feature Error
+  var featureError = this.Tracker().GetError();
+  var curScore = 0.0;
+  for(var i in featureError){
+    curScore += featureError[i].length()
+  }
+  curScore /= featureError.length;
+
+  //Iter of this episode
+  this.iterations++;
+  if(this.iterations % 10 === 0){
+    this.iter_error_table.push([this.iterations, curScore]);
+  }
+
+  if(curScore <= 10.0){
+    this.GoToInit();
+    this.Redraw();
+  }
+}
+
+
+
 
 E_Manager.prototype.RanBool = function()
 {
@@ -346,6 +445,29 @@ E_Manager.prototype.GoToInit = function()
   var z = Math.tan(camera.fov / 5.0) * (camera.far - y) * this.Frand(-1, 1);
 
   camera.position.set(x, y, z);
+
+
+
+  if(this.startTime === null){
+    this.startTime = new Date();
+    return;
+  }
+
+  //Save Progress untill now
+
+  if(this.iter_error_table.length > 1){
+    elapsedTime = (new Date() - this.startTime) / 1000;
+    this.SocketMgr().EmitData("SAVE_LEARNING_PROGRESS", [this.episode, elapsedTime]);
+
+    //Save currnet episode error reduction
+    this.SocketMgr().EmitData("SAVE_ITERATION_ERROR", this.iter_error_table);
+    this.episode++;
+  }
+
+  //Re-initialize for next episode
+  this.startTime = new Date();
+  this.iterations = 0;
+  this.iter_error_table = [['iterations', 'error']];
 
 }
 
@@ -394,72 +516,9 @@ E_Manager.prototype.Frand = function(min, max)
 
 E_Manager.prototype.OnNNCalibration = function(value)
 {
+
   this.m_bNNCalibration = value;
 }
-
-E_Manager.prototype.NNCalibration = function()
-{
-  var camera = this.renderer[0].camera;
-
-  //Get Camera Matrix
-  var currentMat = camera.matrix.clone();
-  var invCur = new THREE.Matrix4().getInverse(currentMat, true);
-  //Annotation is a transformation matrix to the ground-truth matrix
-  var annotation = invCur.clone().multiply(this.groundMat);
-
-  //Get 2D Feature Error
-  var featureError = this.Tracker().GetError();
-
-  var inputData = [];
-  for(var i in featureError){
-    inputData.push(featureError[i].x);
-    inputData.push(featureError[i].y);
-  }
-
-
-
-  var features = this.Tracker().calFeature;
-  if(features[0].x < -270 || features[1].x < -270) {
-    this.ReturnCamera(camera)
-    return;
-  }
-  if(features[2].x > 270 || features[3].x > 270) {
-    this.ReturnCamera(camera)
-    return;
-  }
-  if(features[0].y < -270 || features[2].y < -270) {
-    this.ReturnCamera(camera)
-    return;
-  }
-  if(features[1].y > 270 || features[3].y > 270) {
-    this.ReturnCamera(camera)
-    return;
-  }
-
-  var volume = {data:inputData, class:annotation.elements};
-  var idx = this.mlMgr.ForwardBrain(volume);
-  //No Reward
-
-  //Get Action Transformation
-  var action = this.actions[idx];
-  actionArr = [];
-  $.each(action, function(i, n){
-    actionArr.push(n);
-  });
-  var actionMat = new THREE.Matrix4();
-  actionMat.elements = actionArr;
-
-  //Transform
-  currentMat.multiply(actionMat);
-
-  //Update Camear Transformation
-  this.prevTransform = camera.matrix.clone();
-  camera.position.setFromMatrixPosition(currentMat);
-  camera.rotation.setFromRotationMatrix(currentMat);
-
-  this.Redraw();
-}
-
 
 
 E_Manager.prototype.CalibrateGround = function()
@@ -482,7 +541,6 @@ E_Manager.prototype.CalibrateGround = function()
 
   this.Redraw();
 }
-
 
 
 

@@ -19,6 +19,7 @@
   "homepage": "https://github.com/EJShim/EJML#readme",
   "dependencies": {
     "convnetjs": "^0.3.0",
+    "csv-write-stream": "^2.0.0",
     "ejs": "^2.5.5",
     "express": "^4.14.0",
     "jsonfile": "^2.4.0",

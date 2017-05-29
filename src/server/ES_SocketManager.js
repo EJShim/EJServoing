@@ -47,8 +47,23 @@ ES_SocketManager.prototype.HandleSignal = function()
     });
 
     socket.on("SAVE_BRAIN", function(data){
-      console.log("brain saved");
       Mgr.SaveJson("./data/brain.json", data);
+    });
+
+    socket.on("SAVE_LEARNING_PROGRESS", function(data){
+      console.log(data);
+      Mgr.SaveLearningProgress(data);
+    });
+
+
+    var iter = 0;
+    socket.on("SAVE_ITERATION_ERROR", function(data){
+
+
+      console.log("Save Iteration Error")      
+      path = './data/records/out_' + iter + '.csv';
+      iter++;
+      Mgr.SaveCSV(path, data)
     });
 
     socket.on("SAVE_ACTIONS", function(data){

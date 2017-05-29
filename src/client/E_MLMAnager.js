@@ -41,7 +41,7 @@ E_MLManager.prototype.Initialize = function(network)
   opt.gamma = 0.7;
   opt.learning_steps_total = 200000;
   opt.learning_steps_burnin = 3000;
-  opt.epsilon_min = 0.05;
+  opt.epsilon_min = 0.005;
   opt.epsilon_test_time = 0.05;
   opt.layer_defs = layer_defs;
   opt.tdtrainer_options = tdtrainer_options;
@@ -52,7 +52,7 @@ E_MLManager.prototype.Initialize = function(network)
   this.brain = new deepqlearn.Brain(num_inputs, num_actions, opt)
 
   //Load Saved Network
-  this.brain.value_net.fromJSON( JSON.parse(network) );
+  //this.brain.value_net.fromJSON( JSON.parse(network) );
   this.Mgr.SetLog(network);
 
 
@@ -72,7 +72,16 @@ E_MLManager.prototype.BackwardBrain = function(reward)
   this.brain.backward(reward);
 
 
-  this.Mgr.SetLog(this.brain.getLog());
+
+  log = this.brain.getLog() + '# of episodes : ' + this.Mgr.episode;
+  log += '<br> iterations : ' + this.Mgr.iterations;
+
+  if(this.Mgr.startTime !== null){
+    var elapsedTime = new Date() - this.Mgr.startTime;
+    log += '<br> elapsed time : ' + elapsedTime / 1000;
+  }
+
+  this.Mgr.SetLog(log);
   this.SaveBrain();
 }
 
@@ -89,11 +98,10 @@ E_MLManager.prototype.PutVolume = function( volume )
   this.SaveNetwork();
 }
 
-E_MLManager.prototype.Predict = function(input)
+E_MLManager.prototype.Predict = function(volume)
 {
-  var inputVol = new convnetjs.Vol(input);
-  var pred = this.network.forward(inputVol);
-  return pred.w;
+  var action = this.brain.predict(volume.data);
+  return action;
 }
 
 E_MLManager.prototype.SaveNetwork = function()

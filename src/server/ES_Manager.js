@@ -3,6 +3,8 @@ var express = require("express");
 var ES_SocketManager = require("./ES_SocketManager.js");
 
 var jsonfile = require('jsonfile');
+var csvWriter = require('csv-write-stream')
+var fs = require('fs');
 
 
 function ES_Manager()
@@ -21,6 +23,8 @@ function ES_Manager()
   }
 
 
+  ///Recorder
+  this.episode_time_table = [['episodes', 'time']];
 
   ////Initialize
   this.Initialize();
@@ -66,5 +70,27 @@ ES_Manager.prototype.SaveJson = function(path, data)
     if(err)
     {console.error(err)}
   })
+}
+
+
+ES_Manager.prototype.SaveLearningProgress = function(data)
+{
+  this.episode_time_table.push(data);
+  this.SaveCSV('./data/records/progress.csv', this.episode_time_table);
+
+}
+
+ES_Manager.prototype.SaveCSV = function(path, data)
+{
+  var writer = csvWriter({headers:data[0]});
+
+  writer.pipe(fs.createWriteStream(path))
+
+  for(var i=1 ; i<data.length ; i++){
+      writer.write(data[i])
+  }
+
+  writer.end()
+
 }
 module.exports = ES_Manager;
