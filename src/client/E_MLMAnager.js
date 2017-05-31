@@ -1,5 +1,5 @@
 var convnetjs = require('convnetjs');
-var deepqlearn = require('convnetjs/build/deepqlearn.js')
+var deepqlearn = require('../libs/E_Brain.js')
 
 
 //Machine Learning Manager
